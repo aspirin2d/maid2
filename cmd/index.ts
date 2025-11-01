@@ -1,238 +1,651 @@
-import { confirm, input, password, select } from "@inquirer/prompts";
-import { promises as fsp, existsSync } from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
 
-type FlowOption = "sign-in" | "sign-up" | "session-from-token";
+import { input, password } from "@inquirer/prompts";
+import { config as loadEnv } from "dotenv";
 
-const tokenFilePath = path.resolve(process.cwd(), ".token");
-
-async function loadTokenFromFile(): Promise<string | undefined> {
-  if (!existsSync(tokenFilePath)) {
-    return undefined;
-  }
-
-  try {
-    const raw = await fsp.readFile(tokenFilePath, "utf8");
-    const trimmed = raw.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  } catch (error) {
-    console.warn(
-      `\n⚠ Failed to read saved token: ${(error as Error).message}`,
-    );
-    return undefined;
-  }
-}
-
-async function persistToken(token: string) {
-  try {
-    await fsp.writeFile(tokenFilePath, token, {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-    console.log(`\n💾 Saved bearer token to ${path.basename(tokenFilePath)}.`);
-  } catch (error) {
-    console.warn(`\n⚠ Failed to persist token: ${(error as Error).message}`);
-  }
-}
-
-async function clearStoredToken(logMessage = true) {
-  try {
-    await fsp.rm(tokenFilePath);
-    if (logMessage) {
-      console.log("\n🧹 Removed saved token.");
-    }
-  } catch (error) {
-    const err = error as { code?: string; message: string };
-    if (err.code !== "ENOENT") {
-      console.warn(`\n⚠ Failed to remove token file: ${err.message}`);
-    }
-  }
-}
-
-const baseUrl = await input({
-  message: "Better Auth base URL",
-  default: "http://localhost:3000/api/auth",
+loadEnv({
+  path: path.resolve(process.cwd(), ".env"),
+  override: false,
 });
 
-let token: string | undefined;
-let tokenSource: "file" | "prompt" | "api" | undefined;
+type SessionRecord = {
+  token: string;
+  session: SessionPayload | null;
+  user: SessionUser | null;
+  storedAt: string;
+  baseURL: string;
+};
 
-const storedToken = await loadTokenFromFile();
-if (storedToken) {
-  token = storedToken;
-  tokenSource = "file";
-  console.log("\n🔐 Using saved bearer token from .token");
+type SessionPayload = {
+  session: {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    userId: string;
+    expiresAt: string;
+    token: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  };
+  user: SessionUser;
+};
+
+type SessionUser = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  email: string;
+  emailVerified: boolean;
+  name: string | null;
+  image?: string | null;
+};
+
+const SESSION_FILE = path.resolve(process.cwd(), ".session");
+const AUTH_BASE_URL = resolveAuthBaseURL(
+  process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+);
+const APP_BASE_URL = AUTH_BASE_URL.replace(/\/api\/auth$/, "");
+
+type StoryRecord = {
+  id: number;
+  userId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CommandContext = {
+  session: SessionRecord | null;
+};
+
+type CommandOutcome = {
+  exit?: boolean;
+};
+
+type CommandDefinition = {
+  name: string;
+  description: string;
+  isVisible: (session: SessionRecord | null) => boolean;
+  handler: (context: CommandContext) => Promise<CommandOutcome | void>;
+};
+
+const isLoggedIn = (session: SessionRecord | null) => Boolean(session?.token);
+
+const COMMANDS: CommandDefinition[] = [
+  {
+    name: "/help",
+    description: "Show available commands",
+    isVisible: () => true,
+    handler: async ({ session }) => {
+      showHelp(session);
+    },
+  },
+  {
+    name: "/login",
+    description: "Sign in with your email and password",
+    isVisible: (session) => !isLoggedIn(session),
+    handler: async () => {
+      await handleAuth("login");
+    },
+  },
+  {
+    name: "/signup",
+    description: "Create a new account",
+    isVisible: (session) => !isLoggedIn(session),
+    handler: async () => {
+      await handleAuth("signup");
+    },
+  },
+  {
+    name: "/story list",
+    description: "List your stories",
+    isVisible: isLoggedIn,
+    handler: async ({ session }) => {
+      await executeWithSession(session, listStories);
+    },
+  },
+  {
+    name: "/story show",
+    description: "Show a story by ID",
+    isVisible: isLoggedIn,
+    handler: async ({ session }) => {
+      await executeWithSession(session, showStory);
+    },
+  },
+  {
+    name: "/story create",
+    description: "Create a new story",
+    isVisible: isLoggedIn,
+    handler: async ({ session }) => {
+      await executeWithSession(session, createStory);
+    },
+  },
+  {
+    name: "/story update",
+    description: "Rename an existing story",
+    isVisible: isLoggedIn,
+    handler: async ({ session }) => {
+      await executeWithSession(session, updateStory);
+    },
+  },
+  {
+    name: "/story delete",
+    description: "Delete a story",
+    isVisible: isLoggedIn,
+    handler: async ({ session }) => {
+      await executeWithSession(session, deleteStory);
+    },
+  },
+  {
+    name: "/logout",
+    description: "Sign out and clear the saved session",
+    isVisible: isLoggedIn,
+    handler: async ({ session }) => {
+      await handleLogout(session);
+    },
+  },
+  {
+    name: "/exit",
+    description: "Close this CLI",
+    isVisible: () => true,
+    handler: async () => ({ exit: true }),
+  },
+];
+
+const COMMAND_LOOKUP = new Map(COMMANDS.map((command) => [command.name, command]));
+
+async function main() {
+  printWelcomeMessage();
+
+  let exit = false;
+
+  while (!exit) {
+    const sessionRecord = await readSessionFile();
+    const visibleCommands = COMMANDS.filter((command) =>
+      command.isVisible(sessionRecord),
+    );
+
+    const availableNames = visibleCommands.map((command) => command.name);
+    const choice = (
+      await input({
+        message: "Enter a command (type /help for options):",
+        validate: (value) => {
+          if (!value?.trim()) {
+            return "Command is required.";
+          }
+          const normalized = value.trim();
+          if (!availableNames.includes(normalized)) {
+            return `Unknown command. Expected one of: ${availableNames.join(", ")}`;
+          }
+          return true;
+        },
+      })
+    ).trim();
+
+    const command = COMMAND_LOOKUP.get(choice);
+    if (!command) {
+      console.log("⚠️  Command not recognized. Try again.");
+      continue;
+    }
+
+    const result = await command.handler({ session: sessionRecord });
+    if (result?.exit) {
+      exit = true;
+    }
+  }
+
+  console.log("👋 Goodbye!");
+  process.exit(0);
 }
 
-let flow: FlowOption | undefined;
-
-if (!token) {
-  flow = (await select({
-    message: "Choose bearer flow",
-    choices: [
-      { name: "Sign in existing user", value: "sign-in" },
-      { name: "Sign up new user", value: "sign-up" },
-      { name: "Validate existing bearer token", value: "session-from-token" },
-    ],
-  })) as FlowOption;
-}
-
-if (!token && flow === "session-from-token") {
-  token = await input({
-    message: "Paste bearer token",
-    validate: (value) =>
-      value.trim().length > 0 ? true : "Token cannot be empty",
-  });
-  tokenSource = "prompt";
-} else if (!token && flow) {
-  const emailAddress = await input({
+async function handleAuth(mode: "login" | "signup") {
+  const email = await input({
     message: "Email",
-    validate: (value) =>
-      value.includes("@") ? true : "Enter a valid email address",
+    validate: requiredField("Email"),
   });
-
   const secret = await password({
     message: "Password",
-    mask: "*",
-    validate: (value) =>
-      value.length >= 8 ? true : "Use at least 8 characters",
+    validate: requiredField("Password"),
   });
 
-  let displayName: string | undefined;
-  if (flow === "sign-up") {
-    displayName = await input({
+  let name: string | undefined;
+  if (mode === "signup") {
+    name = await input({
       message: "Name",
-      default: emailAddress.split("@")[0],
+      validate: requiredField("Name"),
     });
   }
 
-  const endpoint =
-    flow === "sign-up"
-      ? `${baseUrl}/sign-up/email`
-      : `${baseUrl}/sign-in/email`;
-
+  const endpoint = mode === "signup" ? "/sign-up/email" : "/sign-in/email";
   const payload =
-    flow === "sign-up"
-      ? { email: emailAddress, password: secret, name: displayName }
-      : { email: emailAddress, password: secret };
+    mode === "signup"
+      ? { name, email, password: secret }
+      : { email, password: secret };
 
-  const response = await fetch(endpoint, {
+  const response = await safeFetch(endpoint, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    console.error(`Request failed (${response.status}): ${text}`);
-    process.exit(1);
+    const message = await extractErrorMessage(response);
+    console.error(`❌ ${capitalize(mode)} failed: ${message}`);
+    return;
   }
 
-  const data = (await response.json()) as Record<string, unknown>;
+  const data = await parseJSON<{
+    token?: string;
+    user?: SessionUser;
+  }>(response);
 
-  console.log("\n✔ Auth request succeeded");
-  // console.table(
-  //   Object.entries(data)
-  //     .filter(([_, value]) => value != null)
-  //     .reduce<Record<string, unknown>>((acc, [key, value]) => {
-  //       acc[key] = value;
-  //       return acc;
-  //     }, {}),
-  // );
-
-  token =
-    (data["token"] as string | undefined) ??
-    (data["session"] instanceof Object
-      ? (data["session"] as Record<string, any>)["token"]
-      : undefined);
-
+  const token = response.headers.get("set-auth-token") ?? data?.token;
   if (!token) {
-    console.warn(
-      "\n⚠ No session token detected in the response; verify the Better Auth configuration.",
+    console.error(
+      "❌ Authentication succeeded but no bearer token was returned.",
     );
-    const proceed = await confirm({
-      message: "Continue without session check?",
-      default: false,
-    });
-
-    if (!proceed) {
-      process.exit(0);
-    }
-  } else {
-    console.log(`\n🔐 Bearer token\n${token}`);
+    return;
   }
 
-  tokenSource = token ? "api" : undefined;
-}
+  const session = await fetchSession(token);
 
-if (!token) {
-  console.log("\nNo token provided; skipping session lookup.");
-  process.exit(0);
-}
+  const record: SessionRecord = {
+    token,
+    session,
+    user: session?.user ?? data?.user ?? null,
+    storedAt: new Date().toISOString(),
+    baseURL: AUTH_BASE_URL,
+  };
 
-const sessionResponse = await fetch(`${baseUrl}/get-session`, {
-  headers: {
-    authorization: `Bearer ${token}`,
-  },
-});
+  await fs.writeFile(SESSION_FILE, JSON.stringify(record, null, 2), {
+    encoding: "utf8",
+  });
 
-if (!sessionResponse.ok) {
-  const text = await sessionResponse.text();
-  console.warn(
-    `\n⚠ Session check failed (${sessionResponse.status}): ${text}`,
+  console.log(
+    `✅ ${capitalize(mode)} complete. Session saved for ${record.user?.email ?? email}.`,
   );
-  if (tokenSource === "file") {
-    await clearStoredToken(false);
-    console.log("\n🧹 Removed saved token because it is no longer valid.");
+}
+
+async function handleLogout(record: SessionRecord | null) {
+  if (!record?.token) {
+    console.log("⚠️  You are not logged in.");
+    return;
   }
-  process.exit(0);
+
+  const response = await safeFetch("/sign-out", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${record.token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Logout failed: ${message}`);
+    return;
+  }
+
+  await fs.rm(SESSION_FILE, { force: true });
+  console.log("✅ Logged out and session removed.");
 }
 
-const session = await sessionResponse.json();
-// console.log("\n📄 Session payload");
-// console.dir(session, { depth: null, colors: true });
+async function fetchSession(token: string) {
+  const response = await safeFetch("/get-session", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
-if (tokenSource !== "file") {
-  await persistToken(token);
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`⚠️  Unable to fetch session: ${message}`);
+    return null;
+  }
+
+  return parseJSON<SessionPayload>(response);
 }
 
-const postLoginAction = (await select({
-  message: "Session actions",
-  choices: [
-    { name: "Log out", value: "logout" },
-    { name: "Exit", value: "exit" },
-  ],
-})) as "logout" | "exit";
+async function executeWithSession(
+  sessionRecord: SessionRecord | null,
+  action: (token: string) => Promise<void>,
+) {
+  if (!sessionRecord?.token) {
+    console.log("⚠️  No active session. Log in before managing stories.");
+    return;
+  }
 
-if (postLoginAction === "logout") {
-  try {
-    const signOutResponse = await fetch(`${baseUrl}/sign-out`, {
+  await action(sessionRecord.token);
+}
+
+async function listStories(token: string) {
+  const response = await safeFetch(
+    "/api/s",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Failed to list stories: ${message}`);
+    return;
+  }
+
+  const data = await parseJSON<{ stories?: StoryRecord[] }>(response);
+  const stories = Array.isArray(data?.stories) ? data.stories : [];
+
+  if (stories.length === 0) {
+    console.log("ℹ️  No stories found.");
+    return;
+  }
+
+  console.log("Stories:");
+  for (const entry of stories) {
+    console.log(`- [${entry.id}] ${entry.name}`);
+  }
+}
+
+async function showStory(token: string) {
+  const storyId = await promptForStoryId();
+  if (storyId === null) {
+    return;
+  }
+
+  const response = await safeFetch(
+    `/api/s/${storyId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Failed to fetch story: ${message}`);
+    return;
+  }
+
+  const data = await parseJSON<{ story?: StoryRecord }>(response);
+  if (!data?.story) {
+    console.log("ℹ️  Story details are unavailable.");
+    return;
+  }
+
+  logStoryDetails("Story details", data.story);
+}
+
+async function createStory(token: string) {
+  const name = await input({
+    message: "Story name",
+    validate: requiredField("Story name"),
+  });
+
+  const response = await safeFetch(
+    "/api/s",
+    {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    });
+      body: JSON.stringify({ name: name.trim() }),
+    },
+    "app",
+  );
 
-    if (!signOutResponse.ok) {
-      const text = await signOutResponse.text();
-      console.warn(
-        `\n⚠ Remote sign-out failed (${signOutResponse.status}): ${text}`,
-      );
-    } else {
-      console.log("\n🚪 Signed out via Better Auth API.");
-    }
-  } catch (error) {
-    console.warn(
-      `\n⚠ Failed to call sign-out endpoint: ${(error as Error).message}`,
-    );
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Failed to create story: ${message}`);
+    return;
   }
 
-  await clearStoredToken();
-  console.log(
-    "\n✅ Logged out locally. Run the CLI again to authenticate with Better Auth.",
-  );
-} else {
-  console.log("\nSession preserved. Run the CLI again for more actions.");
+  const data = await parseJSON<{ story?: StoryRecord }>(response);
+  if (!data?.story) {
+    console.log("✅ Story created.");
+    return;
+  }
+
+  logStoryDetails("Created story", data.story);
 }
+
+async function updateStory(token: string) {
+  const storyId = await promptForStoryId();
+  if (storyId === null) {
+    return;
+  }
+
+  const name = await input({
+    message: "New story name",
+    validate: requiredField("Story name"),
+  });
+
+  const response = await safeFetch(
+    `/api/s/${storyId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: name.trim() }),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Failed to update story: ${message}`);
+    return;
+  }
+
+  const data = await parseJSON<{ story?: StoryRecord }>(response);
+  if (!data?.story) {
+    console.log("✅ Story updated.");
+    return;
+  }
+
+  logStoryDetails("Updated story", data.story);
+}
+
+async function deleteStory(token: string) {
+  const storyId = await promptForStoryId();
+  if (storyId === null) {
+    return;
+  }
+
+  const response = await safeFetch(
+    `/api/s/${storyId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Failed to delete story: ${message}`);
+    return;
+  }
+
+  console.log(`✅ Deleted story ${storyId}.`);
+}
+
+async function promptForStoryId() {
+  const value = await input({
+    message: "Story ID",
+    validate: requirePositiveInteger("Story ID"),
+  });
+
+  const id = Number(value.trim());
+  if (!Number.isInteger(id) || id <= 0) {
+    return null;
+  }
+  return id;
+}
+
+function logStoryDetails(title: string, storyRecord: StoryRecord) {
+  console.log(title);
+  console.log(`- ID: ${storyRecord.id}`);
+  console.log(`- Name: ${storyRecord.name}`);
+  console.log(`- Created: ${storyRecord.createdAt}`);
+  console.log(`- Updated: ${storyRecord.updatedAt}`);
+}
+
+function resolveAuthBaseURL(base: string) {
+  const trimmed = base.replace(/\/$/, "");
+  if (trimmed.endsWith("/api/auth")) {
+    return trimmed;
+  }
+  return `${trimmed}/api/auth`;
+}
+
+function printWelcomeMessage() {
+  console.log("\n✨ Maid CLI ready. Type a command or /help to see options.");
+}
+
+function renderStatus(session: SessionRecord | null) {
+  console.log("\n────────────────────────");
+  if (session?.user) {
+    const displayName = session.user.name?.trim()
+      ? `${session.user.name} <${session.user.email}>`
+      : session.user.email;
+    console.log(`👤 ${displayName}`);
+  } else {
+    console.log("🔒 Not logged in");
+  }
+
+  if (session?.storedAt) {
+    const storedAt = new Date(session.storedAt);
+    if (!Number.isNaN(storedAt.valueOf())) {
+      console.log(`🗄️  Session saved: ${storedAt.toLocaleString()}`);
+    }
+  }
+
+  console.log(`🌐 API base: ${APP_BASE_URL}`);
+}
+
+function renderCommandMenu(commands: CommandDefinition[]) {
+  console.log("\nAvailable commands:");
+  const nameWidth = commands.reduce(
+    (max, command) => Math.max(max, command.name.length),
+    0,
+  );
+
+  for (const command of commands) {
+    const padded = command.name.padEnd(nameWidth, " ");
+    console.log(`  ${padded}  ${command.description}`);
+  }
+}
+
+function showHelp(session: SessionRecord | null) {
+  const visibleCommands = COMMANDS.filter((command) =>
+    command.isVisible(session),
+  );
+  renderStatus(session);
+  renderCommandMenu(visibleCommands);
+}
+
+function requiredField(label: string) {
+  return (value: string) => {
+    if (!value?.trim()) {
+      return `${label} is required.`;
+    }
+    return true;
+  };
+}
+
+function requirePositiveInteger(label: string) {
+  return (value: string) => {
+    const trimmed = value?.trim() ?? "";
+    if (!trimmed) {
+      return `${label} is required.`;
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isInteger(numeric) || numeric <= 0) {
+      return `${label} must be a positive integer.`;
+    }
+    return true;
+  };
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+async function readSessionFile() {
+  try {
+    const raw = await fs.readFile(SESSION_FILE, "utf8");
+    return JSON.parse(raw) as SessionRecord;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    console.error("⚠️  Unable to read .session file:", error);
+    return null;
+  }
+}
+
+async function safeFetch(
+  pathOrUrl: string,
+  init?: RequestInit,
+  base: "auth" | "app" = "auth",
+): Promise<Response> {
+  const baseUrl = base === "auth" ? AUTH_BASE_URL : APP_BASE_URL;
+  const target = pathOrUrl.startsWith("http")
+    ? pathOrUrl
+    : `${baseUrl}${pathOrUrl}`;
+
+  try {
+    return await fetch(target, init);
+  } catch (error) {
+    console.error(`❌ Network error calling ${target}:`, error);
+    throw error;
+  }
+}
+
+async function extractErrorMessage(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      const body = await response.json();
+      if (typeof body?.message === "string") {
+        return body.message;
+      }
+    } catch {
+      // ignore JSON parsing failures
+    }
+  }
+  return `${response.status} ${response.statusText}`.trim();
+}
+
+async function parseJSON<T>(response: Response): Promise<T | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+void main().catch((error) => {
+  console.error("❌ Unexpected error:", error);
+  process.exitCode = 1;
+});
