@@ -1,0 +1,14 @@
+services:
+  db:
+    image: pgvector/pgvector:0.8.1-pg18-trixie # PostgreSQL with pgvector support
+    container_name: pg_vector
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /data
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pg/data:/data
+      - ./pg/pg_vector.sql:/docker-entrypoint-initdb.d/schema.sql
