@@ -1,4 +1,13 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  serial,
+  integer,
+  pgView,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -59,3 +68,45 @@ export const verification = pgTable("verification", {
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
 });
+
+export const story = pgTable("story", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const message = pgTable("message", {
+  id: serial("id").primaryKey(),
+  storyId: integer("story_id")
+    .notNull()
+    .references(() => story.id, { onDelete: "cascade" }),
+  role: text("role", { enum: ["system", "user", "assistant"] }).notNull(),
+  content: text("content").notNull(),
+  extracted: boolean("extracted").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const userMessages = pgView("user_messages").as((qb) =>
+  qb
+    .select({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      extracted: message.extracted,
+      createdAt: message.createdAt,
+    })
+    .from(message)
+    .innerJoin(story, eq(message.storyId, story.id))
+    .innerJoin(user, eq(story.userId, user.id)),
+);
