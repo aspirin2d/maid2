@@ -67,8 +67,11 @@ export async function embedText(
   text: string,
   dims = EMBEDDING_DIMS,
 ): Promise<number[]> {
-  const [first] = await embedTexts(provider, [text], dims);
-  return first!;
+  const embeddings = await embedTexts(provider, [text], dims);
+  if (embeddings.length === 0) {
+    throw new Error("Failed to generate embedding: embedTexts returned empty array");
+  }
+  return embeddings[0];
 }
 
 // ============
