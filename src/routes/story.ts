@@ -2,8 +2,6 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
 import { getStoryHandler, listStoryHandlers } from "../story-handler/index.js";
-import { streamSSE } from "hono/streaming";
-import { streamOpenAIStructured, streamOllamaStructured } from "../llm.js";
 import {
   getStoriesByUser,
   getStoryById,
@@ -14,7 +12,9 @@ import {
 } from "../story.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validateStoryId } from "../middleware/params.js";
-import { formatZodError, toData } from "../validation.js";
+import { isValidHandler } from "../middleware/handler.js";
+import { formatZodError } from "../validation.js";
+import { streamWithAdapter } from "../streaming.js";
 
 const storiesRoute = new Hono<{ Variables: AppVariables }>();
 
@@ -244,99 +244,13 @@ storiesRoute.post("/:id/stream", validateStoryId, async (c) => {
 
   const { prompt, schema } = renderData;
 
-  if (resolvedProvider === "openai") {
-    return streamSSE(c, async (output) => {
-      try {
-        const startEvent = handler.onStart();
-        await output.writeSSE({
-          event: startEvent.event,
-          data: toData(startEvent.data),
-        });
-
-        for await (const ev of streamOpenAIStructured({
-          prompt,
-          format: { name: "output", schema: z.toJSONSchema(schema) },
-        })) {
-          if (ev.type === "delta") {
-            const deltaEvent = handler.onContent(ev.data);
-            await output.writeSSE({
-              event: deltaEvent.event,
-              data: toData(deltaEvent.data),
-            });
-          }
-          if (ev.type === "error") {
-            await output.writeSSE({ event: "error", data: ev.data });
-            break;
-          }
-          if (ev.type === "done") break;
-        }
-        const finishEvent = await handler.onFinish();
-        await output.writeSSE({
-          event: finishEvent.event,
-          data: toData(finishEvent.data),
-        });
-      } catch (e) {
-        console.log(e);
-        await output.writeSSE({
-          event: "finish",
-          data: toData({
-            done: true,
-            error: e instanceof Error ? e.message : String(e),
-          }),
-        });
-      }
-    });
-  }
-
-  // provider === 'ollama'
-  return streamSSE(c, async (output) => {
-    // Provider streaming loop; surface provider errors
-    try {
-      const startEvent = handler.onStart();
-      await output.writeSSE({
-        event: startEvent.event,
-        data: toData(startEvent.data),
-      });
-      for await (const ev of streamOllamaStructured({
-        prompt,
-        format: { name: "output", schema: z.toJSONSchema(schema) },
-      })) {
-        if (ev.type === "thinking") {
-          const thinkingEvent = handler.onThinking(ev.data);
-          await output.writeSSE({
-            event: thinkingEvent.event,
-            data: toData(thinkingEvent.data),
-          });
-        }
-        if (ev.type === "delta") {
-          const deltaEvent = handler.onContent(ev.data);
-          await output.writeSSE({
-            event: deltaEvent.event,
-            data: toData(deltaEvent.data),
-          });
-        }
-        if (ev.type === "error") {
-          await output.writeSSE({ event: "error", data: ev.data });
-        }
-        if (ev.type === "done") break;
-      }
-      const finishEvent = await handler.onFinish();
-      await output.writeSSE({
-        event: finishEvent.event,
-        data: toData(finishEvent.data),
-      });
-    } catch (e) {
-      console.error(e);
-      await output.writeSSE({
-        event: "error",
-        data: toData(e instanceof Error ? e.message : String(e)),
-      });
-    }
+  // 3) Use streaming adapter to handle the complexity
+  return streamWithAdapter(c, {
+    provider: resolvedProvider,
+    handler,
+    prompt,
+    schema,
   });
 });
-
-function isValidHandler(name: string) {
-  return listStoryHandlers().includes(name);
-}
 
 export default storiesRoute;
