@@ -1,10 +1,15 @@
 import { input, password } from "@inquirer/prompts";
 
-import { AUTH_BASE_URL } from "./config.js";
-import { clearSessionFile, fetchSession, writeSessionFile } from "./session.js";
-import { extractErrorMessage, parseJSON, safeFetch } from "./http.js";
-import type { SessionRecord, SessionUser } from "./types.js";
-import { capitalize, requiredField } from "./utils.js";
+import {
+  AUTH_BASE_URL,
+  APP_BASE_URL,
+  clearSessionFile,
+  fetchSession,
+  writeSessionFile,
+  type SessionRecord,
+  type SessionUser,
+} from "./core.js";
+import { extractErrorMessage, parseJSON, safeFetch, capitalize, requiredField } from "./lib.js";
 
 async function handleAuth(mode: "login" | "signup") {
   const email = await input({
@@ -30,13 +35,18 @@ async function handleAuth(mode: "login" | "signup") {
       ? { name, email, password: secret }
       : { email, password: secret };
 
-  const response = await safeFetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await safeFetch(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    "auth",
+    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
+  );
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
@@ -80,12 +90,17 @@ async function handleLogout(record: SessionRecord | null) {
     return;
   }
 
-  const response = await safeFetch("/sign-out", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${record.token}`,
+  const response = await safeFetch(
+    "/sign-out",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${record.token}`,
+      },
     },
-  });
+    "auth",
+    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
+  );
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
