@@ -1,15 +1,20 @@
-import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
-import db from "../db.js";
-import { story } from "../schema/db.js";
 import { getStoryHandler, listStoryHandlers } from "../story-handler/index.js";
 import { streamSSE } from "hono/streaming";
 import { streamOpenAIStructured, streamOllamaStructured } from "../llm.js";
+import {
+  getStoriesByUser,
+  getStoryById,
+  storyExists,
+  createStory,
+  updateStory,
+  deleteStory,
+  getStoryForStreaming,
+} from "../story.js";
 
 const storiesRoute = new Hono<{ Variables: AppVariables }>();
-type StoryInsert = typeof story.$inferInsert;
 
 const providerEnum = z.enum(["openai", "ollama"]);
 type Provider = z.infer<typeof providerEnum>;
@@ -41,11 +46,7 @@ storiesRoute.get("/", async (c) => {
   }
 
   try {
-    const stories = await db
-      .select()
-      .from(story)
-      .where(eq(story.userId, user.id));
-
+    const stories = await getStoriesByUser(user.id);
     return c.json({ stories });
   } catch (error) {
     console.error("Failed to list stories", error);
@@ -80,13 +81,8 @@ storiesRoute.get("/:id/handlers", async (c) => {
   }
 
   try {
-    const storyExists = await db
-      .select({ id: story.id })
-      .from(story)
-      .where(and(eq(story.userId, user.id), eq(story.id, id)))
-      .limit(1);
-
-    if (storyExists.length === 0) {
+    const exists = await storyExists(user.id, id);
+    if (!exists) {
       return c.json({ error: "Story not found" }, 404);
     }
 
@@ -110,17 +106,12 @@ storiesRoute.get("/:id", async (c) => {
   }
 
   try {
-    const result = await db
-      .select()
-      .from(story)
-      .where(and(eq(story.userId, user.id), eq(story.id, id)))
-      .limit(1);
-
-    if (result.length === 0) {
+    const result = await getStoryById(user.id, id);
+    if (!result) {
       return c.json({ error: "Story not found" }, 404);
     }
 
-    return c.json({ story: result[0] });
+    return c.json({ story: result });
   } catch (error) {
     console.error("Failed to fetch story", error);
     return c.json({ error: "Failed to fetch story" }, 500);
@@ -148,17 +139,13 @@ storiesRoute.post("/", async (c) => {
   }
 
   try {
-    const inserted = await db
-      .insert(story)
-      .values({
-        userId: user.id,
-        name,
-        provider: resolvedProvider,
-        handler: resolvedHandler,
-      })
-      .returning();
-
-    return c.json({ story: inserted[0] }, 201);
+    const inserted = await createStory(
+      user.id,
+      name,
+      resolvedProvider,
+      resolvedHandler,
+    );
+    return c.json({ story: inserted }, 201);
   } catch (error) {
     console.error("Failed to create story", error);
     return c.json({ error: "Failed to create story" }, 500);
@@ -182,7 +169,11 @@ storiesRoute.patch("/:id", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const updates: Partial<StoryInsert> = {};
+  const updates: Partial<{
+    name: string;
+    provider: "openai" | "ollama";
+    handler: string;
+  }> = {};
   if (parsed.data.name !== undefined) {
     updates.name = parsed.data.name;
   }
@@ -201,17 +192,12 @@ storiesRoute.patch("/:id", async (c) => {
   }
 
   try {
-    const updated = await db
-      .update(story)
-      .set(updates)
-      .where(and(eq(story.userId, user.id), eq(story.id, id)))
-      .returning();
-
-    if (updated.length === 0) {
+    const updated = await updateStory(user.id, id, updates);
+    if (!updated) {
       return c.json({ error: "Story not found" }, 404);
     }
 
-    return c.json({ story: updated[0] });
+    return c.json({ story: updated });
   } catch (error) {
     console.error("Failed to update story", error);
     return c.json({ error: "Failed to update story" }, 500);
@@ -230,12 +216,8 @@ storiesRoute.delete("/:id", async (c) => {
   }
 
   try {
-    const deleted = await db
-      .delete(story)
-      .where(and(eq(story.userId, user.id), eq(story.id, id)))
-      .returning();
-
-    if (deleted.length === 0) {
+    const deleted = await deleteStory(user.id, id);
+    if (!deleted) {
       return c.json({ error: "Story not found" }, 404);
     }
 
@@ -268,21 +250,11 @@ storiesRoute.post("/:id/stream", async (c) => {
   if (!parsed.success) {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
-  const storyRow = await db
-    .select({
-      id: story.id,
-      provider: story.provider,
-      handler: story.handler,
-    })
-    .from(story)
-    .where(and(eq(story.userId, user.id), eq(story.id, id)))
-    .limit(1);
 
-  if (storyRow.length === 0) {
+  const currentStory = await getStoryForStreaming(user.id, id);
+  if (!currentStory) {
     return c.json({ error: "Story not found" }, 404);
   }
-
-  const currentStory = storyRow[0];
   const resolvedProvider: Provider = currentStory.provider;
   const resolvedHandler = currentStory.handler;
 
