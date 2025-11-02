@@ -75,6 +75,10 @@ export const story = pgTable("story", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  provider: text("provider", { enum: ["openai", "ollama"] })
+    .notNull()
+    .default("openai"),
+  handler: text("string").notNull().default("simple"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

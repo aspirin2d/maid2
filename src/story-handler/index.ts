@@ -60,3 +60,10 @@ export function getStoryHandler(
   if (!factory) return undefined;
   return factory(ctx);
 }
+
+export function listStoryHandlers(): string[] {
+  return Array.from(handlers.keys());
+}
+
+// Register built-in handlers lazily to avoid circular TDZ issues.
+void import("./simple.js");

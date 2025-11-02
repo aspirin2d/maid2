@@ -4,21 +4,33 @@ import { z } from "zod";
 import type { AppVariables } from "../types.js";
 import db from "../db.js";
 import { story } from "../schema/db.js";
-import { getStoryHandler } from "../story-handler/index.js";
+import { getStoryHandler, listStoryHandlers } from "../story-handler/index.js";
 import { streamSSE } from "hono/streaming";
 import { streamOpenAIStructured, streamOllamaStructured } from "../llm.js";
 
 const storiesRoute = new Hono<{ Variables: AppVariables }>();
+type StoryInsert = typeof story.$inferInsert;
+
+const providerEnum = z.enum(["openai", "ollama"]);
+type Provider = z.infer<typeof providerEnum>;
+const handlerSchema = z.string().trim().min(1, "Story handler is required");
+
+const DEFAULT_PROVIDER: Provider = "openai";
+const DEFAULT_HANDLER = "simple";
 
 const createStorySchema = z
   .object({
     name: z.string().trim().min(1, "Story name is required"),
+    provider: providerEnum.optional(),
+    handler: handlerSchema.optional(),
   })
   .strict();
 
 const updateStorySchema = z
   .object({
     name: z.string().trim().min(1, "Story name cannot be empty").optional(),
+    provider: providerEnum.optional(),
+    handler: handlerSchema.optional(),
   })
   .strict();
 
@@ -38,6 +50,51 @@ storiesRoute.get("/", async (c) => {
   } catch (error) {
     console.error("Failed to list stories", error);
     return c.json({ error: "Failed to list stories" }, 500);
+  }
+});
+
+storiesRoute.get("/handlers", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  try {
+    const handlers = listStoryHandlers().map((name) => ({ name }));
+    return c.json({ handlers });
+  } catch (error) {
+    console.error("Failed to fetch story handlers", error);
+    return c.json({ error: "Failed to fetch story handlers" }, 500);
+  }
+});
+
+storiesRoute.get("/:id/handlers", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const id = parseStoryId(c.req.param("id"));
+  if (!id) {
+    return c.json({ error: "Story ID must be a positive integer" }, 400);
+  }
+
+  try {
+    const storyExists = await db
+      .select({ id: story.id })
+      .from(story)
+      .where(and(eq(story.userId, user.id), eq(story.id, id)))
+      .limit(1);
+
+    if (storyExists.length === 0) {
+      return c.json({ error: "Story not found" }, 404);
+    }
+
+    const handlers = listStoryHandlers().map((name) => ({ name }));
+    return c.json({ handlers });
+  } catch (error) {
+    console.error("Failed to fetch story handlers", error);
+    return c.json({ error: "Failed to fetch story handlers" }, 500);
   }
 });
 
@@ -82,12 +139,23 @@ storiesRoute.post("/", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const { name } = parsed.data;
+  const { name, provider, handler } = parsed.data;
+  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const resolvedHandler = handler ?? DEFAULT_HANDLER;
+
+  if (!isValidHandler(resolvedHandler)) {
+    return c.json({ error: `Invalid handler: ${resolvedHandler}` }, 400);
+  }
 
   try {
     const inserted = await db
       .insert(story)
-      .values({ userId: user.id, name })
+      .values({
+        userId: user.id,
+        name,
+        provider: resolvedProvider,
+        handler: resolvedHandler,
+      })
       .returning();
 
     return c.json({ story: inserted[0] }, 201);
@@ -114,9 +182,18 @@ storiesRoute.patch("/:id", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const updates: { name?: string } = {};
+  const updates: Partial<StoryInsert> = {};
   if (parsed.data.name !== undefined) {
     updates.name = parsed.data.name;
+  }
+  if (parsed.data.provider !== undefined) {
+    updates.provider = parsed.data.provider;
+  }
+  if (parsed.data.handler !== undefined) {
+    if (!isValidHandler(parsed.data.handler)) {
+      return c.json({ error: `Invalid handler: ${parsed.data.handler}` }, 400);
+    }
+    updates.handler = parsed.data.handler;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -170,11 +247,7 @@ storiesRoute.delete("/:id", async (c) => {
 });
 
 // Input contract
-const streamInput = z.object({
-  handler: z.string(),
-  input: z.any(),
-  provider: z.enum(["openai", "ollama"]).optional(),
-});
+const streamInput = z.any();
 
 // ==============
 // Route: /stream
@@ -195,20 +268,43 @@ storiesRoute.post("/:id/stream", async (c) => {
   if (!parsed.success) {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
-  const { handler: handlerName, input, provider } = parsed.data;
+  const storyRow = await db
+    .select({
+      id: story.id,
+      provider: story.provider,
+      handler: story.handler,
+    })
+    .from(story)
+    .where(and(eq(story.userId, user.id), eq(story.id, id)))
+    .limit(1);
+
+  if (storyRow.length === 0) {
+    return c.json({ error: "Story not found" }, 404);
+  }
+
+  const currentStory = storyRow[0];
+  const resolvedProvider: Provider = currentStory.provider;
+  const resolvedHandler = currentStory.handler;
+
+  if (!isValidHandler(resolvedHandler)) {
+    return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
+  }
 
   // 1) Resolve handler (instantiate per request with context)
-  const handler = getStoryHandler(handlerName, { story: id, provider });
+  const handler = getStoryHandler(resolvedHandler, {
+    story: id,
+    provider: resolvedProvider,
+  });
   if (!handler)
-    return c.json({ error: `handler not found: ${handlerName}` }, 400);
+    return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
 
   // 2) Let handler render prompt and JSON Schema, and optional bypass
-  const renderData = await handler.init(input);
+  const renderData = await handler.init(parsed.data);
   if (!renderData) return c.json({ ok: true }, 200);
 
   const { prompt, schema } = renderData;
 
-  if (provider === "openai") {
+  if (resolvedProvider === "openai") {
     return streamSSE(c, async (output) => {
       try {
         const startEvent = handler.onStart();
@@ -298,6 +394,10 @@ storiesRoute.post("/:id/stream", async (c) => {
     }
   });
 });
+
+function isValidHandler(name: string) {
+  return listStoryHandlers().includes(name);
+}
 
 function parseStoryId(value: string) {
   const numericId = Number(value);
