@@ -1,7 +1,8 @@
-import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
-import db from "../db.js";
-import { message } from "../schema/db.js";
+import {
+  getMessagesByStory,
+  bulkInsertMessages,
+} from "../message.js";
 import {
   registerStoryHandler,
   type StoryContext,
@@ -37,11 +38,7 @@ function extractRequestText(input: unknown): string | null {
 }
 
 const renderPrompt = async (input: any, ctx: StoryContext) => {
-  const rows = await db
-    .select({ role: message.role, content: message.content })
-    .from(message)
-    .where(eq(message.storyId, ctx.story))
-    .orderBy(asc(message.createdAt));
+  const rows = await getMessagesByStory(ctx.story);
 
   const prompt = [
     "You are a helpful assistant, response user's question in JSON format",
@@ -96,26 +93,30 @@ const factory = (ctx: StoryContext): StoryHandler => {
     },
     async onFinish() {
       // Save user and assistant messages in a transaction
-      await db.transaction(async (tx) => {
-        // Save user message
-        const userContent = extractRequestText(userInput);
-        if (userContent) {
-          await tx.insert(message).values({
-            storyId: ctx.story,
-            role: "user",
-            content: userContent,
-          });
-        }
+      const messages = [];
 
-        // Save assistant message
-        if (assistantResponse.trim().length > 0) {
-          await tx.insert(message).values({
-            storyId: ctx.story,
-            role: "assistant",
-            content: assistantResponse.trim(),
-          });
-        }
-      });
+      // Add user message
+      const userContent = extractRequestText(userInput);
+      if (userContent) {
+        messages.push({
+          storyId: ctx.story,
+          role: "user" as const,
+          content: userContent,
+        });
+      }
+
+      // Add assistant message
+      if (assistantResponse.trim().length > 0) {
+        messages.push({
+          storyId: ctx.story,
+          role: "assistant" as const,
+          content: assistantResponse.trim(),
+        });
+      }
+
+      if (messages.length > 0) {
+        await bulkInsertMessages(messages);
+      }
 
       return { event: "finish", data: "stream-finished" };
     },
