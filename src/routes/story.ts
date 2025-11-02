@@ -251,7 +251,7 @@ storiesRoute.post("/:id/stream", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const currentStory = await getStoryForStreaming(user.id, id);
+  const currentStory = await getStoryById(user.id, id);
   if (!currentStory) {
     return c.json({ error: "Story not found" }, 404);
   }

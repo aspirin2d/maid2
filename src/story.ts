@@ -87,20 +87,3 @@ export async function deleteStory(userId: string, storyId: number) {
 
   return deleted.length > 0 ? deleted[0] : null;
 }
-
-/**
- * Get story with provider and handler info for streaming
- */
-export async function getStoryForStreaming(userId: string, storyId: number) {
-  const result = await db
-    .select({
-      id: story.id,
-      provider: story.provider,
-      handler: story.handler,
-    })
-    .from(story)
-    .where(and(eq(story.userId, userId), eq(story.id, storyId)))
-    .limit(1);
-
-  return result.length > 0 ? result[0] : null;
-}
