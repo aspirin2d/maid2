@@ -12,8 +12,14 @@ import {
   updateStory,
   deleteStory,
 } from "../story.js";
+import { requireAuth } from "../middleware/auth.js";
+import { validateStoryId } from "../middleware/params.js";
+import { formatZodError, toData } from "../utils/validation.js";
 
 const storiesRoute = new Hono<{ Variables: AppVariables }>();
+
+// Apply authentication middleware to all story routes
+storiesRoute.use("/*", requireAuth);
 
 const providerEnum = z.enum(["openai", "ollama"]);
 type Provider = z.infer<typeof providerEnum>;
@@ -39,10 +45,7 @@ const updateStorySchema = z
   .strict();
 
 storiesRoute.get("/", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
 
   try {
     const stories = await getStoriesByUser(user.id);
@@ -54,11 +57,6 @@ storiesRoute.get("/", async (c) => {
 });
 
 storiesRoute.get("/handlers", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
   try {
     const handlers = listStoryHandlers().map((name) => ({ name }));
     return c.json({ handlers });
@@ -68,16 +66,9 @@ storiesRoute.get("/handlers", async (c) => {
   }
 });
 
-storiesRoute.get("/:id/handlers", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const id = parseStoryId(c.req.param("id"));
-  if (!id) {
-    return c.json({ error: "Story ID must be a positive integer" }, 400);
-  }
+storiesRoute.get("/:id/handlers", validateStoryId, async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+  const id = c.get("storyId"); // Safe: validateStoryId middleware ensures valid ID
 
   try {
     const exists = await storyExists(user.id, id);
@@ -93,16 +84,9 @@ storiesRoute.get("/:id/handlers", async (c) => {
   }
 });
 
-storiesRoute.get("/:id", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const id = parseStoryId(c.req.param("id"));
-  if (!id) {
-    return c.json({ error: "Story ID must be a positive integer" }, 400);
-  }
+storiesRoute.get("/:id", validateStoryId, async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+  const id = c.get("storyId"); // Safe: validateStoryId middleware ensures valid ID
 
   try {
     const result = await getStoryById(user.id, id);
@@ -118,10 +102,7 @@ storiesRoute.get("/:id", async (c) => {
 });
 
 storiesRoute.post("/", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
 
   const payload = await c.req.json().catch(() => undefined);
   const parsed = createStorySchema.safeParse(payload);
@@ -151,16 +132,9 @@ storiesRoute.post("/", async (c) => {
   }
 });
 
-storiesRoute.patch("/:id", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const id = parseStoryId(c.req.param("id"));
-  if (!id) {
-    return c.json({ error: "Story ID must be a positive integer" }, 400);
-  }
+storiesRoute.patch("/:id", validateStoryId, async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+  const id = c.get("storyId"); // Safe: validateStoryId middleware ensures valid ID
 
   const payload = await c.req.json().catch(() => undefined);
   const parsed = updateStorySchema.safeParse(payload);
@@ -203,16 +177,9 @@ storiesRoute.patch("/:id", async (c) => {
   }
 });
 
-storiesRoute.delete("/:id", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const id = parseStoryId(c.req.param("id"));
-  if (!id) {
-    return c.json({ error: "Story ID must be a positive integer" }, 400);
-  }
+storiesRoute.delete("/:id", validateStoryId, async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+  const id = c.get("storyId"); // Safe: validateStoryId middleware ensures valid ID
 
   try {
     const deleted = await deleteStory(user.id, id);
@@ -227,22 +194,24 @@ storiesRoute.delete("/:id", async (c) => {
   }
 });
 
-// Input contract
-const streamInput = z.any();
+// Input contract: accept flexible input formats
+const streamInput = z.union([
+  z.string(),
+  z.object({
+    prompt: z.string().optional(),
+    question: z.string().optional(),
+    message: z.string().optional(),
+    input: z.string().optional(),
+  }),
+  z.record(z.string(), z.unknown()), // Allow other object shapes to be handled by handler
+]);
 
 // ==============
 // Route: /stream
 // ==============
-storiesRoute.post("/:id/stream", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const id = parseStoryId(c.req.param("id"));
-  if (!id) {
-    return c.json({ error: "Story ID must be a positive integer" }, 400);
-  }
+storiesRoute.post("/:id/stream", validateStoryId, async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+  const id = c.get("storyId"); // Safe: validateStoryId middleware ensures valid ID
 
   const payload = await c.req.json().catch(() => undefined);
   const parsed = streamInput.safeParse(payload);
@@ -370,25 +339,4 @@ function isValidHandler(name: string) {
   return listStoryHandlers().includes(name);
 }
 
-function parseStoryId(value: string) {
-  const numericId = Number(value);
-  if (!Number.isInteger(numericId) || numericId <= 0) {
-    return null;
-  }
-  return numericId;
-}
-
 export default storiesRoute;
-
-function formatZodError(error: z.ZodError) {
-  return error.issues[0]?.message ?? "Invalid request body";
-}
-
-export function toData(d: unknown): string {
-  if (typeof d === "string") return d;
-  try {
-    return JSON.stringify(d);
-  } catch {
-    return String(d);
-  }
-}

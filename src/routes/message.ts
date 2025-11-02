@@ -1,44 +1,49 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { AppVariables } from "../types.js";
 import { getMessagesByUser } from "../message.js";
+import { requireAuth } from "../middleware/auth.js";
+import { formatZodError } from "../utils/validation.js";
 
 const messagesRoute = new Hono<{ Variables: AppVariables }>();
 
+// Apply authentication middleware to all message routes
+messagesRoute.use("/*", requireAuth);
+
+// Query parameter validation schema
+const messageQuerySchema = z.object({
+  extracted: z
+    .enum(["0", "1"])
+    .optional()
+    .transform((v) => (v === "1" ? true : v === "0" ? false : undefined)),
+  story: z
+    .string()
+    .regex(/^\d+$/, "story must be a positive integer")
+    .transform(Number)
+    .optional(),
+});
+
 messagesRoute.get("/", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
 
-  const extractedParam = c.req.query("extracted");
-  let extractedFilter: boolean | null = null;
-  if (extractedParam !== undefined) {
-    if (extractedParam === "1") {
-      extractedFilter = true;
-    } else if (extractedParam === "0") {
-      extractedFilter = false;
-    } else {
-      return c.json({ error: "extracted must be 0 or 1" }, 400);
-    }
-  }
+  // Parse and validate query parameters
+  const queryParams = {
+    extracted: c.req.query("extracted"),
+    story: c.req.query("story"),
+  };
 
-  const storyParam = c.req.query("story");
-  let storyId: number | null = null;
-  if (storyParam !== undefined) {
-    const parsed = Number(storyParam);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      return c.json({ error: "story must be a positive integer" }, 400);
-    }
-    storyId = parsed;
+  const parsed = messageQuerySchema.safeParse(queryParams);
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
   const filters: { storyId?: number; extracted?: boolean } = {};
 
-  if (storyId !== null) {
-    filters.storyId = storyId;
+  if (parsed.data.story !== undefined) {
+    filters.storyId = parsed.data.story;
   }
-  if (extractedFilter !== null) {
-    filters.extracted = extractedFilter;
+  if (parsed.data.extracted !== undefined) {
+    filters.extracted = parsed.data.extracted;
   }
 
   const messages = await getMessagesByUser(user.id, filters);
