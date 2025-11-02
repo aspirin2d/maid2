@@ -43,7 +43,7 @@ importers:
         specifier: ^7.9.0
         version: 7.9.0(@types/node@20.19.24)
       '@types/node':
-        specifier: ^20.11.17
+        specifier: ^20.19.24
         version: 20.19.24
       '@types/pg':
         specifier: ^8.15.6

@@ -78,7 +78,7 @@ export const story = pgTable("story", {
   provider: text("provider", { enum: ["openai", "ollama"] })
     .notNull()
     .default("openai"),
-  handler: text("string").notNull().default("simple"),
+  handler: text("handler").notNull().default("simple"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
