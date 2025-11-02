@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { auth } from "./auth.js";
 import type { AppVariables } from "./types.js";
 import { registerRoutes } from "./routes/index.js";
+import { env } from "./env.js";
 
 const app = new Hono<{
   Variables: AppVariables;
@@ -41,7 +42,7 @@ app.get("/", (c) => {
 serve(
   {
     fetch: app.fetch,
-    port: parseInt(process.env.PORT!),
+    port: env.PORT,
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`);
