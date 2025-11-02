@@ -14,7 +14,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { validateStoryId } from "../middleware/params.js";
 import { isValidHandler } from "../middleware/handler.js";
 import { formatZodError } from "../validation.js";
-import { streamWithAdapter } from "../adapters/streaming.js";
+import { streamWithAdapter } from "../streaming.js";
 
 const storiesRoute = new Hono<{ Variables: AppVariables }>();
 

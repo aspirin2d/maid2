@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
-import { streamOpenAIStructured, streamOllamaStructured } from "../llm.js";
-import type { StoryHandler } from "../story-handler/index.js";
-import { toData } from "../validation.js";
+import { streamOpenAIStructured, streamOllamaStructured } from "./llm.js";
+import type { StoryHandler } from "./story-handler/index.js";
+import { toData } from "./validation.js";
 
 export type Provider = "openai" | "ollama";
 
