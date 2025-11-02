@@ -1,5 +1,6 @@
 import { Ollama } from "ollama";
 import OpenAI from "openai";
+import { env } from "./env.js";
 
 export type Provider = "openai" | "ollama";
 
@@ -11,23 +12,21 @@ export const DEFAULT_OLLAMA_EMBEDDING_MODEL = "qwen3-embedding";
 export const DEFAULT_OLLAMA_MODEL = "alibayram/Qwen3-30B-A3B-Instruct-2507";
 export const DEFAULT_OPENAI_MODEL = "gpt-4.1";
 
-export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL;
-export const OLLAMA_KEEP_ALIVE = process.env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
+export const OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
 
 export function getOpenAI(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  if (!env.OPENAI_API_KEY) {
     throw new Error(
       "OPENAI_API_KEY environment variable is not set. Please add it to your .env file.",
     );
   }
   return new OpenAI({
-    apiKey,
+    apiKey: env.OPENAI_API_KEY,
   });
 }
 
 export function getOllama(): Ollama {
-  const host = OLLAMA_BASE_URL || "http://localhost:11434";
+  const host = env.OLLAMA_BASE_URL || "http://localhost:11434";
   return new Ollama({ host });
 }
 
