@@ -72,25 +72,51 @@ const renderPrompt = async (input: any, ctx: StoryContext) => {
   return prompt.join("\n");
 };
 
-const factory = (ctx: StoryContext): StoryHandler => ({
-  async init(input: any) {
-    return {
-      prompt: await renderPrompt(input, ctx),
-      schema,
-    };
-  },
-  onStart() {
-    return { event: "start", data: "stream-started" };
-  },
-  onContent(content) {
-    return { event: "delta", data: content };
-  },
-  onThinking(content) {
-    return { event: "thinking", data: content };
-  },
-  async onFinish() {
-    return { event: "finish", data: "stream-finished" };
-  },
-});
+const factory = (ctx: StoryContext): StoryHandler => {
+  let userInput: any = null;
+  let assistantResponse = "";
+
+  return {
+    async init(input: any) {
+      userInput = input;
+      return {
+        prompt: await renderPrompt(input, ctx),
+        schema,
+      };
+    },
+    onStart() {
+      return { event: "start", data: "stream-started" };
+    },
+    onContent(content) {
+      assistantResponse += content;
+      return { event: "delta", data: content };
+    },
+    onThinking(content) {
+      return { event: "thinking", data: content };
+    },
+    async onFinish() {
+      // Save user message
+      const userContent = extractRequestText(userInput);
+      if (userContent) {
+        await db.insert(message).values({
+          storyId: ctx.story,
+          role: "user",
+          content: userContent,
+        });
+      }
+
+      // Save assistant message
+      if (assistantResponse.trim().length > 0) {
+        await db.insert(message).values({
+          storyId: ctx.story,
+          role: "assistant",
+          content: assistantResponse.trim(),
+        });
+      }
+
+      return { event: "finish", data: "stream-finished" };
+    },
+  };
+};
 
 registerStoryHandler("simple", factory);
