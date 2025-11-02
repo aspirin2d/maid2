@@ -3,9 +3,8 @@ import process from "node:process";
 import { input } from "@inquirer/prompts";
 
 import { COMMAND_LOOKUP, visibleCommands } from "./commands.js";
-import { isPromptAbortError } from "./prompts.js";
-import { readSessionFile } from "./session.js";
-import { printWelcomeMessage } from "./ui.js";
+import { isPromptAbortError, readSessionFile } from "./core.js";
+import { printWelcomeMessage } from "./lib.js";
 
 async function main() {
   printWelcomeMessage();

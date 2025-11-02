@@ -20,7 +20,7 @@
   "devDependencies": {
     "@inquirer/core": "^9.2.1",
     "@inquirer/prompts": "^7.9.0",
-    "@types/node": "^20.11.17",
+    "@types/node": "^20.19.24",
     "@types/pg": "^8.15.6",
     "drizzle-kit": "^0.31.6",
     "tsx": "^4.7.1",

@@ -1,12 +1,14 @@
 import { handleAuth, handleLogout } from "./auth.js";
 import { browseStories } from "./stories.js";
-import { executeWithSession, isLoggedIn } from "./session.js";
-import type {
-  CommandContext,
-  CommandDefinition,
-  SessionRecord,
-} from "./types.js";
-import { showHelp } from "./ui.js";
+import {
+  executeWithSession,
+  isLoggedIn,
+  APP_BASE_URL,
+  type CommandContext,
+  type CommandDefinition,
+  type SessionRecord,
+} from "./core.js";
+import { showHelp } from "./lib.js";
 
 const COMMANDS: CommandDefinition[] = [
   {
@@ -14,7 +16,7 @@ const COMMANDS: CommandDefinition[] = [
     description: "Show available commands",
     isVisible: () => true,
     handler: async ({ session }) => {
-      showHelp(session, visibleCommands(session));
+      showHelp(session, visibleCommands(session), APP_BASE_URL);
     },
   },
   {
