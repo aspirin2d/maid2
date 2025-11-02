@@ -28,21 +28,17 @@ const handlerSchema = z.string().trim().min(1, "Story handler is required");
 const DEFAULT_PROVIDER: Provider = "openai";
 const DEFAULT_HANDLER = "simple";
 
-const createStorySchema = z
-  .object({
-    name: z.string().trim().min(1, "Story name is required"),
-    provider: providerEnum.optional(),
-    handler: handlerSchema.optional(),
-  })
-  .strict();
+const createStorySchema = z.strictObject({
+  name: z.string().trim().min(1, "Story name is required"),
+  provider: providerEnum.optional(),
+  handler: handlerSchema.optional(),
+});
 
-const updateStorySchema = z
-  .object({
-    name: z.string().trim().min(1, "Story name cannot be empty").optional(),
-    provider: providerEnum.optional(),
-    handler: handlerSchema.optional(),
-  })
-  .strict();
+const updateStorySchema = z.strictObject({
+  name: z.string().trim().min(1, "Story name cannot be empty").optional(),
+  provider: providerEnum.optional(),
+  handler: handlerSchema.optional(),
+});
 
 storiesRoute.get("/", async (c) => {
   const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
