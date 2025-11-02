@@ -1,8 +1,6 @@
-import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppVariables } from "../types.js";
-import db from "../db.js";
-import { message, story } from "../schema/db.js";
+import { getMessagesByUser } from "../message-helpers.js";
 
 const messagesRoute = new Hono<{ Variables: AppVariables }>();
 
@@ -34,30 +32,16 @@ messagesRoute.get("/", async (c) => {
     storyId = parsed;
   }
 
-  const conditions = [eq(story.userId, user.id)];
+  const filters: { storyId?: number; extracted?: boolean } = {};
+
   if (storyId !== null) {
-    conditions.push(eq(message.storyId, storyId));
+    filters.storyId = storyId;
   }
   if (extractedFilter !== null) {
-    conditions.push(eq(message.extracted, extractedFilter));
+    filters.extracted = extractedFilter;
   }
 
-  const whereClause =
-    conditions.length === 1 ? conditions[0] : and(...conditions);
-
-  const messages = await db
-    .select({
-      id: message.id,
-      storyId: message.storyId,
-      role: message.role,
-      content: message.content,
-      extracted: message.extracted,
-      createdAt: message.createdAt,
-      updatedAt: message.updatedAt,
-    })
-    .from(message)
-    .innerJoin(story, eq(message.storyId, story.id))
-    .where(whereClause);
+  const messages = await getMessagesByUser(user.id, filters);
 
   return c.json({ messages });
 });
