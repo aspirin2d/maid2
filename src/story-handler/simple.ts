@@ -10,7 +10,7 @@ import {
 } from "./index.js";
 
 const schema = z.object({
-  answer: z.string().describe("Assistant's response."),
+  answer: z.string().meta({ description: "Assistant's response." }),
 });
 
 function extractRequestText(input: unknown): string | null {

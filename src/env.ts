@@ -10,7 +10,7 @@ const envSchema = z.object({
     .pipe(z.number().int().positive().max(65535, "PORT must be between 1 and 65535")),
 
   // Authentication
-  BETTER_AUTH_URL: z.string().url("BETTER_AUTH_URL must be a valid URL"),
+  BETTER_AUTH_URL: z.url({ error: "BETTER_AUTH_URL must be a valid URL" }),
 
   // Database
   DB_USER: z.string().min(1, "DB_USER is required"),
@@ -25,7 +25,7 @@ const envSchema = z.object({
 
   // Optional: LLM providers
   OPENAI_API_KEY: z.string().optional(),
-  OLLAMA_BASE_URL: z.string().url().optional().or(z.literal("")),
+  OLLAMA_BASE_URL: z.url().optional().or(z.literal("")),
   OLLAMA_KEEP_ALIVE: z.string().optional(),
 });
 
