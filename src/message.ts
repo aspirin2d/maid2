@@ -1,16 +1,49 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import db from "./db.js";
 import { message, story } from "./schema/db.js";
 
 /**
  * Query messages by story ID, ordered by creation time
+ * @param storyId - The story ID to query messages for
+ * @param options - Optional parameters for pagination
+ * @param options.limit - Maximum number of messages to return (defaults to all)
+ * @param options.offset - Number of messages to skip (defaults to 0)
+ * @param options.lastN - If provided, returns only the last N messages (most recent)
  */
-export async function getMessagesByStory(storyId: number) {
-  return await db
+export async function getMessagesByStory(
+  storyId: number,
+  options?: { limit?: number; offset?: number; lastN?: number },
+) {
+  let query = db
     .select({ role: message.role, content: message.content })
     .from(message)
-    .where(eq(message.storyId, storyId))
-    .orderBy(asc(message.createdAt));
+    .where(eq(message.storyId, storyId));
+
+  // If lastN is specified, get the most recent N messages
+  if (options?.lastN !== undefined) {
+    const recentMessages = await db
+      .select({ role: message.role, content: message.content })
+      .from(message)
+      .where(eq(message.storyId, storyId))
+      .orderBy(desc(message.createdAt))
+      .limit(options.lastN);
+
+    // Reverse to get chronological order (oldest to newest)
+    return recentMessages.reverse();
+  }
+
+  // Standard pagination
+  query = query.orderBy(asc(message.createdAt));
+
+  if (options?.limit !== undefined) {
+    query = query.limit(options.limit);
+  }
+
+  if (options?.offset !== undefined) {
+    query = query.offset(options.offset);
+  }
+
+  return await query;
 }
 
 /**
@@ -50,6 +83,7 @@ export async function getMessagesByUser(
 
 /**
  * Bulk insert messages within a transaction
+ * Optimized to use batch insert for better performance
  */
 export async function bulkInsertMessages(
   messages: Array<{
@@ -58,15 +92,17 @@ export async function bulkInsertMessages(
     content: string;
   }>,
 ) {
-  await db.transaction(async (tx) => {
-    for (const msg of messages) {
-      if (msg.content.trim().length > 0) {
-        await tx.insert(message).values({
-          storyId: msg.storyId,
-          role: msg.role,
-          content: msg.content.trim(),
-        });
-      }
-    }
-  });
+  // Filter out empty messages and prepare values
+  const validMessages = messages
+    .filter((msg) => msg.content.trim().length > 0)
+    .map((msg) => ({
+      storyId: msg.storyId,
+      role: msg.role,
+      content: msg.content.trim(),
+    }));
+
+  // Batch insert all messages at once (much faster than sequential inserts)
+  if (validMessages.length > 0) {
+    await db.insert(message).values(validMessages);
+  }
 }

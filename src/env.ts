@@ -27,6 +27,12 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OLLAMA_BASE_URL: z.url().optional().or(z.literal("")),
   OLLAMA_KEEP_ALIVE: z.string().optional(),
+
+  // Optional: LLM model configuration
+  OPENAI_MODEL: z.string().optional(),
+  OLLAMA_MODEL: z.string().optional(),
+  OPENAI_EMBEDDING_MODEL: z.string().optional(),
+  OLLAMA_EMBEDDING_MODEL: z.string().optional(),
 });
 
 function validateEnv() {

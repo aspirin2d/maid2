@@ -7,6 +7,7 @@ import {
   serial,
   integer,
   pgView,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -69,37 +70,58 @@ export const verification = pgTable("verification", {
     .notNull(),
 });
 
-export const story = pgTable("story", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  provider: text("provider", { enum: ["openai", "ollama"] })
-    .notNull()
-    .default("openai"),
-  handler: text("handler").notNull().default("simple"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-});
+export const story = pgTable(
+  "story",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    provider: text("provider", { enum: ["openai", "ollama"] })
+      .notNull()
+      .default("openai"),
+    handler: text("handler").notNull().default("simple"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => ({
+    // Index for finding stories by user
+    userIdIdx: index("story_user_id_idx").on(table.userId),
+  }),
+);
 
-export const message = pgTable("message", {
-  id: serial("id").primaryKey(),
-  storyId: integer("story_id")
-    .notNull()
-    .references(() => story.id, { onDelete: "cascade" }),
-  role: text("role", { enum: ["system", "user", "assistant"] }).notNull(),
-  content: text("content").notNull(),
-  extracted: boolean("extracted").notNull().default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-});
+export const message = pgTable(
+  "message",
+  {
+    id: serial("id").primaryKey(),
+    storyId: integer("story_id")
+      .notNull()
+      .references(() => story.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["system", "user", "assistant"] }).notNull(),
+    content: text("content").notNull(),
+    extracted: boolean("extracted").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => ({
+    // Index for finding messages by story (most common query)
+    storyIdIdx: index("message_story_id_idx").on(table.storyId),
+    // Index for filtering by extracted flag
+    extractedIdx: index("message_extracted_idx").on(table.extracted),
+    // Composite index for story + extracted queries (even faster)
+    storyExtractedIdx: index("message_story_extracted_idx").on(
+      table.storyId,
+      table.extracted,
+    ),
+  }),
+);
 
 export const userMessages = pgView("user_messages").as((qb) =>
   qb
