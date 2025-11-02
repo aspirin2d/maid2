@@ -12,9 +12,13 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.7",
     "hono": "^4.10.4",
-    "pg": "^8.16.3"
+    "ollama": "^0.6.2",
+    "openai": "^6.7.0",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@inquirer/core": "^9.2.1",
     "@inquirer/prompts": "^7.9.0",
     "@types/node": "^20.11.17",
     "@types/pg": "^8.15.6",

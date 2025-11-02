@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { auth } from "./auth.js";
-import type { AppVariables } from "./app-context.js";
+import type { AppVariables } from "./types.js";
 import { registerRoutes } from "./routes/index.js";
 
 const app = new Hono<{
