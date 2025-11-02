@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   getMessagesByStory,
   bulkInsertMessages,
-} from "../message-helpers.js";
+} from "../message.js";
 import {
   registerStoryHandler,
   type StoryContext,

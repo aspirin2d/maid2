@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppVariables } from "../types.js";
-import { getMessagesByUser } from "../message-helpers.js";
+import { getMessagesByUser } from "../message.js";
 
 const messagesRoute = new Hono<{ Variables: AppVariables }>();
 
