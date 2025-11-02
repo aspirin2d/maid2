@@ -11,7 +11,6 @@ import {
   createStory,
   updateStory,
   deleteStory,
-  getStoryForStreaming,
 } from "../story.js";
 
 const storiesRoute = new Hono<{ Variables: AppVariables }>();
