@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AppVariables } from "../types.js";
 import { getMessagesByUser } from "../message.js";
 import { requireAuth } from "../middleware/auth.js";
-import { formatZodError } from "../utils/validation.js";
+import { formatZodError } from "../validation.js";
 
 const messagesRoute = new Hono<{ Variables: AppVariables }>();
 

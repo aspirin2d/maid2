@@ -14,7 +14,7 @@ import {
 } from "../story.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validateStoryId } from "../middleware/params.js";
-import { formatZodError, toData } from "../utils/validation.js";
+import { formatZodError, toData } from "../validation.js";
 
 const storiesRoute = new Hono<{ Variables: AppVariables }>();
 
