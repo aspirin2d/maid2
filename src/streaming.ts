@@ -3,7 +3,6 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { streamOpenAIStructured, streamOllamaStructured } from "./llm.js";
 import type { StoryHandler } from "./story-handler/index.js";
-import { toData } from "./validation.js";
 
 export type Provider = "openai" | "ollama";
 
@@ -31,7 +30,7 @@ export async function streamWithAdapter(
         const startEvent = handler.onStart();
         await output.writeSSE({
           event: startEvent.event,
-          data: toData(startEvent.data),
+          data: startEvent.data,
         });
 
         // Stream content
@@ -43,7 +42,7 @@ export async function streamWithAdapter(
             const deltaEvent = handler.onContent(ev.data);
             await output.writeSSE({
               event: deltaEvent.event,
-              data: toData(deltaEvent.data),
+              data: deltaEvent.data,
             });
           }
           if (ev.type === "error") {
@@ -57,13 +56,13 @@ export async function streamWithAdapter(
         const finishEvent = await handler.onFinish();
         await output.writeSSE({
           event: finishEvent.event,
-          data: toData(finishEvent.data),
+          data: finishEvent.data,
         });
       } catch (e) {
         console.error("OpenAI streaming error:", e);
         await output.writeSSE({
           event: "finish",
-          data: toData({
+          data: JSON.stringify({
             done: true,
             error: e instanceof Error ? e.message : String(e),
           }),
@@ -79,7 +78,7 @@ export async function streamWithAdapter(
       const startEvent = handler.onStart();
       await output.writeSSE({
         event: startEvent.event,
-        data: toData(startEvent.data),
+        data: startEvent.data,
       });
 
       // Stream content
@@ -91,14 +90,14 @@ export async function streamWithAdapter(
           const thinkingEvent = handler.onThinking(ev.data);
           await output.writeSSE({
             event: thinkingEvent.event,
-            data: toData(thinkingEvent.data),
+            data: thinkingEvent.data,
           });
         }
         if (ev.type === "delta") {
           const deltaEvent = handler.onContent(ev.data);
           await output.writeSSE({
             event: deltaEvent.event,
-            data: toData(deltaEvent.data),
+            data: deltaEvent.data,
           });
         }
         if (ev.type === "error") {
@@ -111,13 +110,13 @@ export async function streamWithAdapter(
       const finishEvent = await handler.onFinish();
       await output.writeSSE({
         event: finishEvent.event,
-        data: toData(finishEvent.data),
+        data: finishEvent.data,
       });
     } catch (e) {
       console.error("Ollama streaming error:", e);
       await output.writeSSE({
         event: "error",
-        data: toData(e instanceof Error ? e.message : String(e)),
+        data: e instanceof Error ? e.message : String(e),
       });
     }
   });
