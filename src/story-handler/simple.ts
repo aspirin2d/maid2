@@ -38,7 +38,8 @@ function extractRequestText(input: unknown): string | null {
 }
 
 const renderPrompt = async (input: any, ctx: StoryContext) => {
-  const rows = await getMessagesByStory(ctx.story);
+  // Limit to last 50 messages for performance (prevents loading huge conversation histories)
+  const rows = await getMessagesByStory(ctx.story, { lastN: 50 });
 
   const prompt = [
     "You are a helpful assistant, response user's question in JSON format",

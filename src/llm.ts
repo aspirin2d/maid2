@@ -6,11 +6,15 @@ export type Provider = "openai" | "ollama";
 
 // Shared embedding configuration
 export const EMBEDDING_DIMS = 1536;
-export const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
-export const DEFAULT_OLLAMA_EMBEDDING_MODEL = "qwen3-embedding";
-// Central default for Ollama generation model
-export const DEFAULT_OLLAMA_MODEL = "alibayram/Qwen3-30B-A3B-Instruct-2507";
-export const DEFAULT_OPENAI_MODEL = "gpt-4.1";
+
+// LLM model configuration (can be overridden via environment variables)
+export const OPENAI_MODEL = env.OPENAI_MODEL ?? "gpt-4.1";
+export const OLLAMA_MODEL =
+  env.OLLAMA_MODEL ?? "alibayram/Qwen3-30B-A3B-Instruct-2507";
+export const OPENAI_EMBEDDING_MODEL =
+  env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small";
+export const OLLAMA_EMBEDDING_MODEL =
+  env.OLLAMA_EMBEDDING_MODEL ?? "qwen3-embedding";
 
 export const OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
 
@@ -46,7 +50,7 @@ export async function embedTexts(
   if (provider === "openai") {
     const client = getOpenAI();
     const res = await client.embeddings.create({
-      model: DEFAULT_OPENAI_EMBEDDING_MODEL,
+      model: OPENAI_EMBEDDING_MODEL,
       input: texts,
       dimensions: dims,
     });
@@ -55,7 +59,7 @@ export async function embedTexts(
 
   const client = getOllama();
   const res = await client.embed({
-    model: DEFAULT_OLLAMA_EMBEDDING_MODEL,
+    model: OLLAMA_EMBEDDING_MODEL,
     input: texts,
     keep_alive: OLLAMA_KEEP_ALIVE,
   });
@@ -97,7 +101,7 @@ export async function* streamOpenAIStructured(args: {
   const { prompt, format } = args;
   const client = getOpenAI();
   const stream = client.responses.stream({
-    model: DEFAULT_OPENAI_MODEL,
+    model: OPENAI_MODEL,
     input: prompt,
     text: { format: { ...format, strict: true, type: "json_schema" } },
   });
@@ -126,7 +130,7 @@ export async function* streamOllamaStructured(args: {
   const { prompt, format } = args;
   const client = getOllama();
   const stream = await client.chat({
-    model: DEFAULT_OLLAMA_MODEL,
+    model: OLLAMA_MODEL,
     messages: [{ role: "user", content: prompt }],
     stream: true,
     // Pass through experimental flag; ignored by models that don't support it
