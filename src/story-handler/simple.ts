@@ -95,24 +95,27 @@ const factory = (ctx: StoryContext): StoryHandler => {
       return { event: "thinking", data: content };
     },
     async onFinish() {
-      // Save user message
-      const userContent = extractRequestText(userInput);
-      if (userContent) {
-        await db.insert(message).values({
-          storyId: ctx.story,
-          role: "user",
-          content: userContent,
-        });
-      }
+      // Save user and assistant messages in a transaction
+      await db.transaction(async (tx) => {
+        // Save user message
+        const userContent = extractRequestText(userInput);
+        if (userContent) {
+          await tx.insert(message).values({
+            storyId: ctx.story,
+            role: "user",
+            content: userContent,
+          });
+        }
 
-      // Save assistant message
-      if (assistantResponse.trim().length > 0) {
-        await db.insert(message).values({
-          storyId: ctx.story,
-          role: "assistant",
-          content: assistantResponse.trim(),
-        });
-      }
+        // Save assistant message
+        if (assistantResponse.trim().length > 0) {
+          await tx.insert(message).values({
+            storyId: ctx.story,
+            role: "assistant",
+            content: assistantResponse.trim(),
+          });
+        }
+      });
 
       return { event: "finish", data: "stream-finished" };
     },
