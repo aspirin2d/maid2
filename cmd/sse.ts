@@ -44,6 +44,7 @@ function parseSegment(segment: string): SSEMessage {
   let event = "message";
   const dataLines: string[] = [];
 
+  // console.log(lines);
   for (const line of lines) {
     if (!line.trim() || line.startsWith(":")) continue;
     if (line.startsWith("event:")) {
@@ -51,7 +52,7 @@ function parseSegment(segment: string): SSEMessage {
       continue;
     }
     if (line.startsWith("data:")) {
-      dataLines.push(line.slice(5).trimStart());
+      dataLines.push(line.slice(6));
       continue;
     }
   }
@@ -61,4 +62,3 @@ function parseSegment(segment: string): SSEMessage {
 
 export type { SSEMessage };
 export { readSSE };
-
