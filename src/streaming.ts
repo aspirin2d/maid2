@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { streamOpenAIStructured, streamOllamaStructured } from "./llm.js";
-import type { StoryHandler } from "./story-handler/index.js";
+import type { StoryHandler } from "./handlers/index.js";
 
 export type Provider = "openai" | "ollama";
 
@@ -17,10 +17,7 @@ export interface StreamingOptions {
  * Streaming adapter that handles both OpenAI and Ollama providers
  * Reduces endpoint complexity by encapsulating streaming logic and error handling
  */
-export async function streamWithAdapter(
-  c: Context,
-  options: StreamingOptions,
-) {
+export async function streamWithAdapter(c: Context, options: StreamingOptions) {
   const { provider, handler, prompt, schema } = options;
 
   if (provider === "openai") {

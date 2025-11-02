@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
-import { getStoryHandler, listStoryHandlers } from "../story-handler/index.js";
+import { getStoryHandler, listStoryHandlers } from "../handlers/index.js";
 import {
   getStoriesByUser,
   getStoryById,
@@ -10,9 +10,9 @@ import {
   updateStory,
   deleteStory,
 } from "../story.js";
-import { requireAuth } from "../middleware/auth.js";
-import { validateStoryId } from "../middleware/params.js";
-import { isValidHandler } from "../middleware/handler.js";
+import { requireAuth } from "../middlewares/auth.js";
+import { validateStoryId } from "../middlewares/params.js";
+import { isValidHandler } from "../middlewares/handler.js";
 import { formatZodError } from "../validation.js";
 import { streamWithAdapter } from "../streaming.js";
 

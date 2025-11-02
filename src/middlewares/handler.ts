@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import type { AppVariables } from "../types.js";
-import { listStoryHandlers } from "../story-handler/index.js";
+import { listStoryHandlers } from "../handlers/index.js";
 
 /**
  * Validates that a handler name exists in the registry

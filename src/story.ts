@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import db from "./db.js";
-import { story } from "./schema/db.js";
+import { story } from "./schemas/db.js";
 
 type StoryInsert = typeof story.$inferInsert;
 

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import db from "./db.js";
-import { message, story } from "./schema/db.js";
+import { message, story } from "./schemas/db.js";
 
 /**
  * Query messages by story ID, ordered by creation time
@@ -14,7 +14,7 @@ export async function getMessagesByStory(
   storyId: number,
   options?: { limit?: number; offset?: number; lastN?: number },
 ) {
-  let query = db
+  const baseQuery = db
     .select({ role: message.role, content: message.content })
     .from(message)
     .where(eq(message.storyId, storyId));
@@ -32,18 +32,19 @@ export async function getMessagesByStory(
     return recentMessages.reverse();
   }
 
-  // Standard pagination
-  query = query.orderBy(asc(message.createdAt));
+  const orderedQuery = baseQuery.orderBy(asc(message.createdAt));
 
-  if (options?.limit !== undefined) {
-    query = query.limit(options.limit);
-  }
+  const limitedQuery =
+    options?.limit !== undefined
+      ? orderedQuery.limit(options.limit)
+      : orderedQuery;
 
-  if (options?.offset !== undefined) {
-    query = query.offset(options.offset);
-  }
+  const finalQuery =
+    options?.offset !== undefined
+      ? limitedQuery.offset(options.offset)
+      : limitedQuery;
 
-  return await query;
+  return await finalQuery;
 }
 
 /**
