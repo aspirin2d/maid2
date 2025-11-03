@@ -7,6 +7,7 @@ import {
   serial,
   text,
   timestamp,
+  vector,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -143,11 +144,20 @@ export const memory = pgTable(
     importance: real("importance"), // 0-1 scale
     confidence: real("confidence"), // 0-1 scale
     action: text("action", { enum: ["ADD", "UPDATE", "DELETE"] }),
+
+    embedding: vector("embedding", { dimensions: 1536 }),
+
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("memory_user_idx").on(table.userId)],
+  (table) => [
+    index("memory_user_idx").on(table.userId),
+    index("embeddingIndex").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops"),
+    ),
+  ],
 );
