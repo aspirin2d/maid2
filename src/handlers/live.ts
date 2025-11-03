@@ -114,8 +114,26 @@ const renderPrompt = async (
     prompt.push("（没有之前的对话）");
   } else {
     for (const row of chatHistory) {
-      const speaker = row.role === "user" ? "用户" : "VTuber";
-      prompt.push(`${speaker}: ${row.content}`);
+      if (row.role === "user") {
+        prompt.push(`用户: ${row.content}`);
+      } else if (row.role === "assistant") {
+        // Parse clips and extract speech
+        try {
+          const parsed = JSON.parse(row.content);
+          if (parsed.clips && Array.isArray(parsed.clips)) {
+            const speeches = parsed.clips
+              .map((clip: any) => clip.speech)
+              .filter((speech: any) => typeof speech === "string" && speech.trim().length > 0)
+              .join("");
+            if (speeches.length > 0) {
+              prompt.push(`VTuber: ${speeches}`);
+            }
+          }
+        } catch (error) {
+          // If parsing fails, skip this message or show as-is
+          console.error("Failed to parse assistant message:", error);
+        }
+      }
     }
   }
 
