@@ -11,13 +11,13 @@ import {
 } from "./index.js";
 
 const clipSchema = z.object({
-  body: z.string().describe("Description of body movement/gesture (e.g., 'wave', 'nod', 'lean forward', 'idle')"),
-  face: z.string().describe("Description of facial expression (e.g., 'smile', 'surprised', 'thinking', 'neutral')"),
-  speech: z.string().describe("Text to be spoken by the vtuber"),
+  body: z.string().describe("身体动作/姿势描述（例如："挥手"、"点头"、"身体前倾"、"待机"）"),
+  face: z.string().describe("面部表情描述（例如："微笑"、"惊讶"、"思考"、"平静"）"),
+  speech: z.string().describe("VTuber要说的文本内容"),
 });
 
 const outputSchema = z.object({
-  clips: z.array(clipSchema).min(1).max(3).describe("1-3 clips for the vtuber response"),
+  clips: z.array(clipSchema).min(1).max(3).describe("VTuber回复的1-3个片段"),
 });
 
 const inputSchema = z.union([
@@ -61,14 +61,14 @@ const renderPrompt = async (
   const messageLimit = (config?.messageLimit as number | undefined) ?? 50;
   const systemPrompt =
     (config?.systemPrompt as string | undefined) ??
-    `You are an AI VTuber character. Your responses should be engaging, expressive, and natural.
-For each response, you must generate 1-3 clips. Each clip represents a moment of interaction with:
-- body: A description of your body movement or gesture (e.g., "wave", "nod enthusiastically", "lean forward", "idle", "shrug")
-- face: A description of your facial expression (e.g., "bright smile", "surprised eyes wide", "thoughtful look", "neutral", "playful wink")
-- speech: The text you speak in this clip
+    `你是一个AI VTuber角色。你的回复应该生动、富有表现力且自然。
+对于每个回复，你必须生成1-3个片段。每个片段代表一个互动时刻，包含：
+- body（身体）：你的身体动作或姿势的描述（例如："挥手"、"热情地点头"、"身体前倾"、"待机"、"耸肩"）
+- face（表情）：你的面部表情的描述（例如："灿烂的笑容"、"惊讶地睁大眼睛"、"若有所思的样子"、"平静"、"俏皮地眨眼"）
+- speech（语音）：你在这个片段中说的文本内容
 
-Break longer responses into multiple clips (max 3) for natural pacing and expressiveness.
-Keep speech segments conversational and not too long per clip.`;
+将较长的回复分解为多个片段（最多3个），以获得自然的节奏和表现力。
+保持每个片段的对话内容简洁，不要太长。`;
 
   const rows = await getMessagesByStory(ctx.story, { lastN: messageLimit });
 
@@ -86,9 +86,9 @@ Keep speech segments conversational and not too long per clip.`;
       });
 
       if (memories.length > 0) {
-        prompt.push("## Memory Context:");
+        prompt.push("## 记忆上下文：");
         prompt.push(
-          "The following information has been extracted from previous conversations:",
+          "以下信息是从之前的对话中提取的：",
         );
         prompt.push("");
 
@@ -104,29 +104,47 @@ Keep speech segments conversational and not too long per clip.`;
     }
   }
 
-  prompt.push("## Chat history:");
+  prompt.push("## 聊天历史：");
 
   const chatHistory = rows.filter(
     (row) => row.role === "user" || row.role === "assistant",
   );
 
   if (chatHistory.length === 0) {
-    prompt.push("(no previous conversation)");
+    prompt.push("（没有之前的对话）");
   } else {
     for (const row of chatHistory) {
-      const speaker = row.role === "user" ? "User" : "VTuber";
-      prompt.push(`${speaker}: ${row.content}`);
+      if (row.role === "user") {
+        prompt.push(`用户: ${row.content}`);
+      } else if (row.role === "assistant") {
+        // Parse clips and extract speech
+        try {
+          const parsed = JSON.parse(row.content);
+          if (parsed.clips && Array.isArray(parsed.clips)) {
+            const speeches = parsed.clips
+              .map((clip: any) => clip.speech)
+              .filter((speech: any) => typeof speech === "string" && speech.trim().length > 0)
+              .join("");
+            if (speeches.length > 0) {
+              prompt.push(`VTuber: ${speeches}`);
+            }
+          }
+        } catch (error) {
+          // If parsing fails, skip this message or show as-is
+          console.error("Failed to parse assistant message:", error);
+        }
+      }
     }
   }
 
   if (request) {
-    prompt.push("", "## Current request:", request);
+    prompt.push("", "## 当前请求：", request);
   }
 
   prompt.push(
     "",
-    "Respond with valid JSON matching the provided schema.",
-    "Generate 1-3 clips with body, face, and speech fields for an expressive VTuber response.",
+    "请使用与提供的架构匹配的有效JSON进行响应。",
+    "生成1-3个包含body、face和speech字段的片段，以实现富有表现力的VTuber回复。",
   );
 
   return prompt.join("\n");
@@ -169,7 +187,7 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
       return {
         name: "live",
         description:
-          "AI VTuber handler that responds with 1-3 clips containing body movements, facial expressions, and speech",
+          "AI VTuber处理器，使用中文回复，输出包含身体动作、面部表情和语音的1-3个片段",
         version: "1.0.0",
         inputSchema,
         outputSchema,
@@ -186,7 +204,7 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
 const metadata: HandlerMetadata = {
   name: "live",
   description:
-    "AI VTuber handler that responds with 1-3 clips containing body movements, facial expressions, and speech",
+    "AI VTuber处理器，使用中文回复，输出包含身体动作、面部表情和语音的1-3个片段",
   version: "1.0.0",
   inputSchema,
   outputSchema,
