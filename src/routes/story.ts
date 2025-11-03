@@ -5,7 +5,6 @@ import {
   getStoryHandler,
   listStoryHandlers,
   listHandlersWithMetadata,
-  type HandlerConfig,
 } from "../handlers/index.js";
 import {
   getStoriesByUser,
@@ -283,26 +282,12 @@ storiesRoute.post("/:id/stream", validateStoryId, async (c) => {
     return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
   }
 
-  // Parse handler config if available
-  let handlerConfig: HandlerConfig | undefined;
-  if (currentStory.handlerConfig) {
-    try {
-      handlerConfig = JSON.parse(currentStory.handlerConfig);
-    } catch (error) {
-      console.error("Failed to parse handler config:", error);
-      // Continue without config if parse fails
-    }
-  }
-
-  // 1) Resolve handler (instantiate per request with context and config)
-  const handler = getStoryHandler(
-    resolvedHandler,
-    {
-      story: id,
-      provider: resolvedProvider,
-    },
-    handlerConfig,
-  );
+  // 1) Resolve handler (instantiate per request with context)
+  // Note: Handler config support is available but not persisted to DB
+  const handler = getStoryHandler(resolvedHandler, {
+    story: id,
+    provider: resolvedProvider,
+  });
   if (!handler)
     return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
 

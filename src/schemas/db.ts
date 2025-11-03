@@ -81,7 +81,6 @@ export const story = pgTable(
       .notNull()
       .default("openai"),
     handler: text("handler").notNull().default("simple"),
-    handlerConfig: text("handler_config"), // JSON string for handler configuration
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
