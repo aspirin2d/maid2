@@ -187,7 +187,7 @@ export async function extractMemoriesForUser(
           ]);
 
           // Update the memory
-          await updateMemory(originalMemoryId, {
+          await updateMemory(userId, originalMemoryId, {
             prevContent: unifiedExistingMemories[memoryIndex].text,
             content: decision.text,
             category: fact.category,

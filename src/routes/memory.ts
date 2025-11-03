@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
 import { MEMORY_CATEGORIES } from "../types.js";
-import { getMemoriesByUser, deleteMemory, insertMemory, updateMemory } from "../memory.js";
+import { getMemoriesByUser, getMemoryById, deleteMemory, insertMemory, updateMemory } from "../memory.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { formatZodError } from "../validation.js";
 import { extractMemoriesForUser } from "../extraction.js";
@@ -143,15 +143,10 @@ memoryRoute.put("/:id", async (c) => {
 
   try {
     // First check if the memory exists and belongs to the user
-    const memories = await getMemoriesByUser(user.id);
-    const existingMemory = memories.find((m) => m.id === memoryId);
+    const existingMemory = await getMemoryById(user.id, memoryId);
 
     if (!existingMemory) {
       return c.json({ error: "Memory not found" }, 404);
-    }
-
-    if (existingMemory.userId !== user.id) {
-      return c.json({ error: "Unauthorized" }, 403);
     }
 
     // Build update object
@@ -171,7 +166,7 @@ memoryRoute.put("/:id", async (c) => {
       updates.embedding = embedding;
     }
 
-    const updated = await updateMemory(memoryId, updates);
+    const updated = await updateMemory(user.id, memoryId, updates);
 
     if (!updated) {
       return c.json({ error: "Failed to update memory" }, 500);
@@ -198,14 +193,9 @@ memoryRoute.delete("/:id", async (c) => {
   }
 
   try {
-    const deleted = await deleteMemory(memoryId);
+    const deleted = await deleteMemory(user.id, memoryId);
     if (!deleted) {
       return c.json({ error: "Memory not found" }, 404);
-    }
-
-    // Verify that the deleted memory belongs to the user
-    if (deleted.userId !== user.id) {
-      return c.json({ error: "Unauthorized" }, 403);
     }
 
     return c.body(null, 204);
