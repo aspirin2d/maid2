@@ -228,6 +228,19 @@ export async function bulkInsertMemories(memories: MemoryInsert[]) {
 }
 
 /**
+ * Get a single memory by ID with user authorization check
+ */
+export async function getMemoryById(userId: string, memoryId: number) {
+  const result = await db
+    .select()
+    .from(memory)
+    .where(and(eq(memory.userId, userId), eq(memory.id, memoryId)))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+/**
  * Get memories by user ID
  */
 export async function getMemoriesByUser(
@@ -265,28 +278,29 @@ export async function getMemoriesByUser(
 }
 
 /**
- * Update a memory
+ * Update a memory with user authorization check
  */
 export async function updateMemory(
+  userId: string,
   memoryId: number,
   updates: Partial<MemoryInsert>,
 ) {
   const updated = await db
     .update(memory)
     .set(updates)
-    .where(eq(memory.id, memoryId))
+    .where(and(eq(memory.id, memoryId), eq(memory.userId, userId)))
     .returning();
 
   return updated.length > 0 ? updated[0] : null;
 }
 
 /**
- * Delete a memory
+ * Delete a memory with user authorization check
  */
-export async function deleteMemory(memoryId: number) {
+export async function deleteMemory(userId: string, memoryId: number) {
   const deleted = await db
     .delete(memory)
-    .where(eq(memory.id, memoryId))
+    .where(and(eq(memory.id, memoryId), eq(memory.userId, userId)))
     .returning();
 
   return deleted.length > 0 ? deleted[0] : null;

@@ -252,12 +252,15 @@ storiesRoute.delete("/:id/messages", validateStoryId, async (c) => {
   const id = c.get("storyId"); // Safe: validateStoryId middleware ensures valid ID
 
   try {
-    const exists = await storyExists(user.id, id);
-    if (!exists) {
-      return c.json({ error: "Story not found" }, 404);
+    const deletedCount = await deleteMessagesByStory(user.id, id);
+    if (deletedCount === 0) {
+      // Could mean story not found or no messages existed
+      const exists = await storyExists(user.id, id);
+      if (!exists) {
+        return c.json({ error: "Story not found" }, 404);
+      }
     }
 
-    const deletedCount = await deleteMessagesByStory(id);
     return c.json({ deletedCount });
   } catch (error) {
     console.error("Failed to clear messages", error);

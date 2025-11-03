@@ -128,11 +128,24 @@ export async function bulkInsertMessages(
 }
 
 /**
- * Delete all messages for a story
+ * Delete all messages for a story with user authorization check
+ * @param userId - The user ID to verify story ownership
  * @param storyId - The story ID to delete messages for
  * @returns The number of messages deleted
  */
-export async function deleteMessagesByStory(storyId: number) {
+export async function deleteMessagesByStory(userId: string, storyId: number) {
+  // Verify story ownership before deleting messages
+  const storyResult = await db
+    .select({ id: story.id })
+    .from(story)
+    .where(and(eq(story.id, storyId), eq(story.userId, userId)))
+    .limit(1);
+
+  // If story doesn't exist or doesn't belong to user, return 0
+  if (storyResult.length === 0) {
+    return 0;
+  }
+
   const result = await db.delete(message).where(eq(message.storyId, storyId));
   return result.rowCount ?? 0;
 }
