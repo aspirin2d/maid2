@@ -9,7 +9,7 @@ import {
 } from "./index.js";
 
 const schema = z.object({
-  answer: z.string().meta({ description: "Assistant's response." }),
+  response: z.string().meta({ description: "Assistant's response." }),
 });
 
 const inputSchema = z.union([
@@ -55,7 +55,7 @@ const renderPrompt = async (
   const messageLimit = (config?.messageLimit as number | undefined) ?? 50;
   const systemPrompt =
     (config?.systemPrompt as string | undefined) ??
-    "You are a helpful assistant, response user's question in JSON format";
+    "You are a helpful assistant, answer user's question in JSON's 'response' field.";
 
   const rows = await getMessagesByStory(ctx.story, { lastN: messageLimit });
 

@@ -636,7 +636,7 @@ function displayParsedResponse(handler: string, payload: string) {
   }
 
   if (handler === "simple" && parsed && typeof parsed === "object") {
-    const message = (parsed as { answer?: unknown }).answer;
+    const message = (parsed as { response?: unknown }).response;
     if (typeof message === "string" && message.trim().length > 0) {
       console.log(`\n📝 Message: ${message}`);
     }
