@@ -173,6 +173,7 @@ type MenuResult<T = any> =
   | { action: "edit"; item: Choice<T> }
   | { action: "create"; item: Choice<T> }
   | { action: "delete"; item: Choice<T> }
+  | { action: "extract"; item: Choice<T> }
   | { action: "cancel" };
 
 export interface MenuPromptConfig<T = any> {
@@ -222,6 +223,10 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
         done({ action: "edit", item: currentChoice });
         return;
       }
+      if (k === "t") {
+        done({ action: "extract", item: currentChoice });
+        return;
+      }
       if (isEnterKey(key)) {
         done({ action: "open", item: currentChoice });
         return;
@@ -238,7 +243,7 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
       return `${caret} ${choice.name}`;
     });
     const help =
-      "↑/↓ move   Enter=chat   e=edit   a/c=create   d/x=delete   Esc=cancel";
+      "↑/↓ move   Enter=chat   e=edit   a/c=create   d/x=delete   t=extract   Esc=cancel";
     return [`${prefix} ${message}`, ...lines, "", help].join("\n");
   },
 );
