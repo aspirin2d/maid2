@@ -1,7 +1,6 @@
+import "dotenv/config";
 import process from "node:process";
-
 import { input } from "@inquirer/prompts";
-
 import { COMMAND_LOOKUP, visibleCommands } from "./commands.js";
 import { isPromptAbortError, readSessionFile } from "./core.js";
 import { printWelcomeMessage } from "./lib.js";
@@ -69,4 +68,3 @@ void main().catch((error) => {
   console.error("❌ Unexpected error:", error);
   process.exitCode = 1;
 });
-

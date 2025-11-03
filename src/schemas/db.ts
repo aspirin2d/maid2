@@ -9,7 +9,15 @@ import {
   timestamp,
   vector,
 } from "drizzle-orm/pg-core";
-import { MEMORY_CATEGORIES } from "../types.js";
+
+const MEMORY_CATEGORIES = [
+  "USER_INFO",
+  "USER_PREFERENCE",
+  "USER_GOAL",
+  "USER_RELATIONSHIP",
+  "EVENT",
+  "OTHER",
+] as const;
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),

@@ -21,9 +21,3 @@ export type JsonValue =
  * Metadata type for database entities
  */
 export type Metadata = Record<string, JsonValue>;
-
-/**
- * Memory category types re-exported from shared-types.ts
- * This maintains backward compatibility for src files
- */
-export { MEMORY_CATEGORIES, type MemoryCategory } from "../shared-types.js";

@@ -1,8 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
-import { MEMORY_CATEGORIES } from "../types.js";
-import { getMemoriesByUser, getMemoryById, deleteMemory, insertMemory, updateMemory } from "../memory.js";
+import {
+  getMemoriesByUser,
+  getMemoryById,
+  deleteMemory,
+  insertMemory,
+  updateMemory,
+} from "../memory.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { formatZodError } from "../validation.js";
 import { extractMemoriesForUser } from "../extraction.js";
@@ -17,6 +22,15 @@ type Provider = z.infer<typeof providerEnum>;
 
 const DEFAULT_PROVIDER: Provider = "openai";
 
+const MEMORY_CATEGORIES = [
+  "USER_INFO",
+  "USER_PREFERENCE",
+  "USER_GOAL",
+  "USER_RELATIONSHIP",
+  "EVENT",
+  "OTHER",
+] as const;
+
 const memoryCategoryEnum = z.enum(MEMORY_CATEGORIES);
 
 const createMemorySchema = z.strictObject({
@@ -28,7 +42,11 @@ const createMemorySchema = z.strictObject({
 });
 
 const updateMemorySchema = z.strictObject({
-  content: z.string().trim().min(1, "Memory content cannot be empty").optional(),
+  content: z
+    .string()
+    .trim()
+    .min(1, "Memory content cannot be empty")
+    .optional(),
   category: memoryCategoryEnum.optional(),
   importance: z.number().min(0).max(1).optional(),
   confidence: z.number().min(0).max(1).optional(),
@@ -59,9 +77,11 @@ memoryRoute.post("/extract", async (c) => {
   const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
 
   const payload = await c.req.json().catch(() => undefined);
-  const parsed = z.strictObject({
-    provider: providerEnum.optional(),
-  }).safeParse(payload);
+  const parsed = z
+    .strictObject({
+      provider: providerEnum.optional(),
+    })
+    .safeParse(payload);
 
   if (!parsed.success) {
     return c.json({ error: formatZodError(parsed.error) }, 400);

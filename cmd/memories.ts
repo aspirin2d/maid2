@@ -14,8 +14,17 @@ import {
   APP_BASE_URL,
   AUTH_BASE_URL,
 } from "./core.js";
-import type { MemoryCategory } from "../shared-types.js";
-import { MEMORY_CATEGORIES } from "../shared-types.js";
+
+const MEMORY_CATEGORIES = [
+  "USER_INFO",
+  "USER_PREFERENCE",
+  "USER_GOAL",
+  "USER_RELATIONSHIP",
+  "EVENT",
+  "OTHER",
+] as const;
+
+export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
 // Helper prompt to wait for any key press
 const waitForKeyPress = createPrompt<void, { message: string }>(
@@ -366,9 +375,11 @@ async function updateMemoryRequest(
   return result?.memory ?? null;
 }
 
-async function extractMemoriesRequest(
-  token: string,
-): Promise<{ factsExtracted: number; memoriesUpdated: number; messagesExtracted: number } | null> {
+async function extractMemoriesRequest(token: string): Promise<{
+  factsExtracted: number;
+  memoriesUpdated: number;
+  messagesExtracted: number;
+} | null> {
   const response = await safeFetch(
     "/api/mem/extract",
     {
@@ -415,7 +426,8 @@ async function memoryMenuPrompt(
       message: "Memories",
       choices: memories.map((memory) => {
         const content = memory.content || "(empty)";
-        const preview = content.length > 60 ? content.substring(0, 60) + "..." : content;
+        const preview =
+          content.length > 60 ? content.substring(0, 60) + "..." : content;
         const category = memory.category ? `[${memory.category}]` : "";
         const timestamp = formatTimestamp(memory.createdAt);
 
@@ -478,8 +490,12 @@ function printMemoryDetails(memory: MemoryRecord) {
     console.log(`   Previous: ${memory.prevContent}`);
   }
   console.log(`   Action: ${memory.action || "N/A"}`);
-  console.log(`   Importance: ${memory.importance !== null ? memory.importance : "N/A"}`);
-  console.log(`   Confidence: ${memory.confidence !== null ? memory.confidence : "N/A"}`);
+  console.log(
+    `   Importance: ${memory.importance !== null ? memory.importance : "N/A"}`,
+  );
+  console.log(
+    `   Confidence: ${memory.confidence !== null ? memory.confidence : "N/A"}`,
+  );
   console.log(`   Created: ${created}`);
   console.log(`   Updated: ${updated}`);
   console.log();
