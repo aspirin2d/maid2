@@ -49,10 +49,16 @@ export async function getMessagesByStory(
 
 /**
  * Query messages by user with optional filters
+ * @param userId - The user ID to query messages for
+ * @param filters - Optional filters for storyId and extracted status
+ * @param options - Optional parameters for pagination
+ * @param options.limit - Maximum number of messages to return (defaults to all)
+ * @param options.offset - Number of messages to skip (defaults to 0)
  */
 export async function getMessagesByUser(
   userId: string,
   filters?: { storyId?: number; extracted?: boolean },
+  options?: { limit?: number; offset?: number },
 ) {
   const conditions = [eq(story.userId, userId)];
 
@@ -67,7 +73,7 @@ export async function getMessagesByUser(
   const whereClause =
     conditions.length === 1 ? conditions[0] : and(...conditions);
 
-  return await db
+  const baseQuery = db
     .select({
       id: message.id,
       storyId: message.storyId,
@@ -79,7 +85,20 @@ export async function getMessagesByUser(
     })
     .from(message)
     .innerJoin(story, eq(message.storyId, story.id))
-    .where(whereClause);
+    .where(whereClause)
+    .orderBy(asc(message.createdAt));
+
+  const limitedQuery =
+    options?.limit !== undefined
+      ? baseQuery.limit(options.limit)
+      : baseQuery;
+
+  const finalQuery =
+    options?.offset !== undefined
+      ? limitedQuery.offset(options.offset)
+      : limitedQuery;
+
+  return await finalQuery;
 }
 
 /**
