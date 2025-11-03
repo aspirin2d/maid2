@@ -44,6 +44,35 @@ pnpm install
 
 The server listens on `http://localhost:<PORT>` (default `3000`) and exposes REST endpoints under `/api/…`.
 
+## API Overview
+All application endpoints require an authenticated Better Auth session. The Hono server reads the Better Auth session cookie or bearer token from the incoming request headers and attaches the user to the request context. Unauthenticated calls return `401 Unauthorized`.
+
+### Authentication
+- `ALL /api/auth/*` – proxied directly to Better Auth’s handler. Use the Better Auth SDK or REST calls here to sign up, sign in, or refresh sessions.
+
+### Stories (`/api/s`)
+- `GET /` – List stories for the signed-in user.
+- `GET /handlers` – List every registered story handler with metadata and JSON Schemas.
+- `GET /:id` – Fetch a single story by numeric ID.
+- `GET /:id/handlers` – Handler metadata scoped to the given story.
+- `POST /` – Create a story. Body: `{ name, provider?, handler? }`. Defaults to handler `simple`, provider `openai`.
+- `PATCH /:id` – Update story name, provider, or handler.
+- `DELETE /:id` – Remove a story you own.
+- `DELETE /:id/messages` – Delete all messages tied to the story.
+- `POST /:id/stream` – SSE endpoint that streams handler output. Emits `start`, `thinking`, `delta`, and `finish` events. Request body accepts `{ prompt | question | message | input | ... }` depending on the handler contract.
+
+### Messages (`/api/m`)
+- `GET /` – List messages for the current user. Query params:
+  - `story=<id>` (optional) limits to a specific story.
+  - `extracted=0|1` filters by whether the message has been mined for memories.
+
+### Memories (`/api/mem`)
+- `GET /` – List memories for the current user.
+- `POST /` – Create a memory. Body: `{ content, category?, importance?, confidence?, provider? }`. Provider defaults to `openai`.
+- `PUT /:id` – Update memory metadata or content (recomputes embeddings when content changes).
+- `DELETE /:id` – Remove a memory you own.
+- `POST /extract` – Run automatic extraction against unprocessed messages. Body optionally includes `{ provider }`.
+
 ## CLI Companion
 The terminal client lives under `cmd/` and shares authentication with the API.
 
