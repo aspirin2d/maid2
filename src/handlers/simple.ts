@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { getMessagesByStory } from "../message.js";
+import { embedTexts } from "../llm.js";
 import { searchSimilarMemories } from "../memory.js";
-import { embedTexts, type Provider } from "../llm.js";
+import { getMessagesByStory } from "../message.js";
 import {
   registerStoryHandler,
-  type StoryContext,
-  type StoryHandler,
   type HandlerConfig,
   type HandlerMetadata,
+  type StoryContext,
+  type StoryHandler,
 } from "./index.js";
 
 const outputSchema = z.object({
@@ -86,7 +86,8 @@ const renderPrompt = async (
         prompt.push("");
 
         for (const { memory } of memories) {
-          const categoryLabel = memory.category?.replace(/_/g, " ").toLowerCase() || "other";
+          const categoryLabel =
+            memory.category?.replace(/_/g, " ").toLowerCase() || "other";
           prompt.push(`- [${categoryLabel}] ${memory.content}`);
         }
         prompt.push("");
@@ -117,7 +118,7 @@ const renderPrompt = async (
   }
 
   prompt.push("", "Respond with valid JSON matching the provided schema.");
-
+  console.log(prompt.join("\n"));
   return prompt.join("\n");
 };
 
