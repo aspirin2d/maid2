@@ -1,17 +1,26 @@
 import { z } from "zod";
-import {
-  getMessagesByStory,
-  bulkInsertMessages,
-} from "../message.js";
+import { getMessagesByStory } from "../message.js";
 import {
   registerStoryHandler,
   type StoryContext,
   type StoryHandler,
+  type HandlerConfig,
+  type HandlerMetadata,
 } from "./index.js";
 
 const schema = z.object({
   answer: z.string().meta({ description: "Assistant's response." }),
 });
+
+const inputSchema = z.union([
+  z.string(),
+  z.object({
+    prompt: z.string().optional(),
+    question: z.string().optional(),
+    message: z.string().optional(),
+    input: z.string().optional(),
+  }),
+]);
 
 function extractRequestText(input: unknown): string | null {
   if (typeof input === "string") {
@@ -37,15 +46,20 @@ function extractRequestText(input: unknown): string | null {
   return null;
 }
 
-const renderPrompt = async (input: any, ctx: StoryContext) => {
-  // Limit to last 50 messages for performance (prevents loading huge conversation histories)
-  const rows = await getMessagesByStory(ctx.story, { lastN: 50 });
+const renderPrompt = async (
+  input: any,
+  ctx: StoryContext,
+  config?: HandlerConfig,
+) => {
+  // Use config to determine message limit, default to 50
+  const messageLimit = (config?.messageLimit as number | undefined) ?? 50;
+  const systemPrompt =
+    (config?.systemPrompt as string | undefined) ??
+    "You are a helpful assistant, response user's question in JSON format";
 
-  const prompt = [
-    "You are a helpful assistant, response user's question in JSON format",
-    "",
-    "## Chat history:",
-  ];
+  const rows = await getMessagesByStory(ctx.story, { lastN: messageLimit });
+
+  const prompt = [systemPrompt, "", "## Chat history:"];
 
   const chatHistory = rows.filter(
     (row) => row.role === "user" || row.role === "assistant",
@@ -70,7 +84,7 @@ const renderPrompt = async (input: any, ctx: StoryContext) => {
   return prompt.join("\n");
 };
 
-const factory = (ctx: StoryContext): StoryHandler => {
+const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
   let userInput: any = null;
   let assistantResponse = "";
 
@@ -78,50 +92,62 @@ const factory = (ctx: StoryContext): StoryHandler => {
     async init(input: any) {
       userInput = input;
       return {
-        prompt: await renderPrompt(input, ctx),
+        prompt: await renderPrompt(input, ctx, config),
         schema,
       };
     },
     onStart() {
-      return { event: "start", data: "stream-started" };
+      // No return value - decoupled from SSE
     },
     onContent(content) {
       assistantResponse += content;
-      return { event: "delta", data: content };
+      return content; // Return processed content as-is
     },
     onThinking(content) {
-      return { event: "thinking", data: content };
+      return content; // Return thinking content as-is
     },
     async onFinish() {
-      // Save user and assistant messages in a transaction
-      const messages = [];
-
-      // Add user message
+      // Return messages to persist - persistence handled by adapter
       const userContent = extractRequestText(userInput);
-      if (userContent) {
-        messages.push({
-          storyId: ctx.story,
-          role: "user" as const,
-          content: userContent,
-        });
-      }
 
-      // Add assistant message
-      if (assistantResponse.trim().length > 0) {
-        messages.push({
-          storyId: ctx.story,
-          role: "assistant" as const,
-          content: assistantResponse.trim(),
-        });
-      }
-
-      if (messages.length > 0) {
-        await bulkInsertMessages(messages);
-      }
-
-      return { event: "finish", data: "stream-finished" };
+      return {
+        userMessage: userContent ?? undefined,
+        assistantMessage:
+          assistantResponse.trim().length > 0
+            ? assistantResponse.trim()
+            : undefined,
+      };
+    },
+    getMetadata(): HandlerMetadata {
+      return {
+        name: "simple",
+        description:
+          "Simple conversational handler with chat history and configurable system prompt",
+        version: "1.0.0",
+        inputSchema,
+        outputSchema: schema,
+        capabilities: {
+          supportsThinking: true,
+          requiresHistory: true,
+          supportsCaching: false,
+        },
+      };
     },
   };
 };
 
-registerStoryHandler("simple", factory);
+const metadata: HandlerMetadata = {
+  name: "simple",
+  description:
+    "Simple conversational handler with chat history and configurable system prompt",
+  version: "1.0.0",
+  inputSchema,
+  outputSchema: schema,
+  capabilities: {
+    supportsThinking: true,
+    requiresHistory: true,
+    supportsCaching: false,
+  },
+};
+
+registerStoryHandler("simple", factory, metadata);

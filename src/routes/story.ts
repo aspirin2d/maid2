@@ -1,7 +1,12 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
-import { getStoryHandler, listStoryHandlers } from "../handlers/index.js";
+import {
+  getStoryHandler,
+  listStoryHandlers,
+  listHandlersWithMetadata,
+  type HandlerConfig,
+} from "../handlers/index.js";
 import {
   getStoriesByUser,
   getStoryById,
@@ -54,7 +59,33 @@ storiesRoute.get("/", async (c) => {
 
 storiesRoute.get("/handlers", async (c) => {
   try {
-    const handlers = listStoryHandlers().map((name) => ({ name }));
+    const handlers = listHandlersWithMetadata().map((entry) => {
+      const result: any = { name: entry.name };
+
+      if (entry.metadata) {
+        result.description = entry.metadata.description;
+        result.version = entry.metadata.version;
+        result.capabilities = entry.metadata.capabilities;
+
+        // Convert Zod schemas to JSON Schema if available
+        if (entry.metadata.inputSchema) {
+          try {
+            result.inputSchema = z.toJSONSchema(entry.metadata.inputSchema);
+          } catch {
+            // Ignore schema conversion errors
+          }
+        }
+        if (entry.metadata.outputSchema) {
+          try {
+            result.outputSchema = z.toJSONSchema(entry.metadata.outputSchema);
+          } catch {
+            // Ignore schema conversion errors
+          }
+        }
+      }
+
+      return result;
+    });
     return c.json({ handlers });
   } catch (error) {
     console.error("Failed to fetch story handlers", error);
@@ -72,7 +103,33 @@ storiesRoute.get("/:id/handlers", validateStoryId, async (c) => {
       return c.json({ error: "Story not found" }, 404);
     }
 
-    const handlers = listStoryHandlers().map((name) => ({ name }));
+    const handlers = listHandlersWithMetadata().map((entry) => {
+      const result: any = { name: entry.name };
+
+      if (entry.metadata) {
+        result.description = entry.metadata.description;
+        result.version = entry.metadata.version;
+        result.capabilities = entry.metadata.capabilities;
+
+        // Convert Zod schemas to JSON Schema if available
+        if (entry.metadata.inputSchema) {
+          try {
+            result.inputSchema = z.toJSONSchema(entry.metadata.inputSchema);
+          } catch {
+            // Ignore schema conversion errors
+          }
+        }
+        if (entry.metadata.outputSchema) {
+          try {
+            result.outputSchema = z.toJSONSchema(entry.metadata.outputSchema);
+          } catch {
+            // Ignore schema conversion errors
+          }
+        }
+      }
+
+      return result;
+    });
     return c.json({ handlers });
   } catch (error) {
     console.error("Failed to fetch story handlers", error);
@@ -226,11 +283,26 @@ storiesRoute.post("/:id/stream", validateStoryId, async (c) => {
     return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
   }
 
-  // 1) Resolve handler (instantiate per request with context)
-  const handler = getStoryHandler(resolvedHandler, {
-    story: id,
-    provider: resolvedProvider,
-  });
+  // Parse handler config if available
+  let handlerConfig: HandlerConfig | undefined;
+  if (currentStory.handlerConfig) {
+    try {
+      handlerConfig = JSON.parse(currentStory.handlerConfig);
+    } catch (error) {
+      console.error("Failed to parse handler config:", error);
+      // Continue without config if parse fails
+    }
+  }
+
+  // 1) Resolve handler (instantiate per request with context and config)
+  const handler = getStoryHandler(
+    resolvedHandler,
+    {
+      story: id,
+      provider: resolvedProvider,
+    },
+    handlerConfig,
+  );
   if (!handler)
     return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
 
@@ -246,6 +318,7 @@ storiesRoute.post("/:id/stream", validateStoryId, async (c) => {
     handler,
     prompt,
     schema,
+    storyId: id,
   });
 });
 
