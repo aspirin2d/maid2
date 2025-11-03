@@ -305,6 +305,7 @@ storiesRoute.post("/:id/stream", validateStoryId, async (c) => {
   // Note: Handler config support is available but not persisted to DB
   const handler = getStoryHandler(resolvedHandler, {
     story: id,
+    userId: user.id,
     provider: resolvedProvider,
   });
   if (!handler)

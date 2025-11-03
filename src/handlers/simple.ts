@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { getMessagesByStory } from "../message.js";
+import { searchSimilarMemories } from "../memory.js";
+import { embedTexts, type Provider } from "../llm.js";
 import {
   registerStoryHandler,
   type StoryContext,
@@ -59,7 +61,43 @@ const renderPrompt = async (
 
   const rows = await getMessagesByStory(ctx.story, { lastN: messageLimit });
 
-  const prompt = [systemPrompt, "", "## Chat history:"];
+  const prompt = [systemPrompt, ""];
+
+  // Retrieve relevant memories for context
+  const request = extractRequestText(input);
+  if (request && ctx.provider) {
+    try {
+      // Generate embedding for the current request
+      const [queryEmbedding] = await embedTexts(ctx.provider, [request]);
+
+      // Search for similar memories (top 5 most relevant)
+      const memories = await searchSimilarMemories(queryEmbedding, {
+        userId: ctx.userId,
+        topK: 5,
+        minSimilarity: 0.5, // Only include memories with >50% similarity
+      });
+
+      // Add memory context to prompt if we found relevant memories
+      if (memories.length > 0) {
+        prompt.push("## Memory Context:");
+        prompt.push(
+          "The following information has been extracted from previous conversations:",
+        );
+        prompt.push("");
+
+        for (const { memory } of memories) {
+          const categoryLabel = memory.category?.replace(/_/g, " ").toLowerCase() || "other";
+          prompt.push(`- [${categoryLabel}] ${memory.content}`);
+        }
+        prompt.push("");
+      }
+    } catch (error) {
+      // Silently fail memory retrieval to not break the handler
+      console.error("Failed to retrieve memories for context:", error);
+    }
+  }
+
+  prompt.push("## Chat history:");
 
   const chatHistory = rows.filter(
     (row) => row.role === "user" || row.role === "assistant",
@@ -74,7 +112,6 @@ const renderPrompt = async (
     }
   }
 
-  const request = extractRequestText(input);
   if (request) {
     prompt.push("", "## Current request:", request);
   }
@@ -122,8 +159,8 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
       return {
         name: "simple",
         description:
-          "Simple conversational handler with chat history and configurable system prompt",
-        version: "1.0.0",
+          "Simple conversational handler with chat history, memory context retrieval, and configurable system prompt",
+        version: "1.1.0",
         inputSchema,
         outputSchema,
         capabilities: {
@@ -139,8 +176,8 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
 const metadata: HandlerMetadata = {
   name: "simple",
   description:
-    "Simple conversational handler with chat history and configurable system prompt",
-  version: "1.0.0",
+    "Simple conversational handler with chat history, memory context retrieval, and configurable system prompt",
+  version: "1.1.0",
   inputSchema,
   outputSchema,
   capabilities: {
