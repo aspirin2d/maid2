@@ -368,6 +368,7 @@ const renderPrompt = async (
 
   // Retrieve relevant memories for context
   const request = extractRequestText(input);
+  let hasMemories = false;
   if (request && ctx.provider) {
     try {
       const [queryEmbedding] = await embedTexts(ctx.provider, [request]);
@@ -378,6 +379,7 @@ const renderPrompt = async (
       });
 
       if (memories.length > 0) {
+        hasMemories = true;
         prompt.push("## 记忆上下文：");
         prompt.push("以下信息是从之前的对话中提取的：");
         prompt.push("");
@@ -392,6 +394,20 @@ const renderPrompt = async (
     } catch (error) {
       console.error("Failed to retrieve memories for context:", error);
     }
+  }
+
+  // Add instruction to ask for context when no memories are found
+  if (!hasMemories) {
+    prompt.push("## 重要提示：");
+    prompt.push("目前没有关于这位用户的记忆或上下文信息。");
+    prompt.push("请在自然对话中，友好地询问一些关于用户的信息，例如：");
+    prompt.push("- 用户希望你怎么称呼他们（昵称、名字等）");
+    prompt.push("- 他们的兴趣爱好");
+    prompt.push("- 他们今天的心情或最近发生的事情");
+    prompt.push("- 任何其他能帮助你更好了解他们的信息");
+    prompt.push("");
+    prompt.push("注意：不要一次问太多问题，保持自然轻松的对话氛围。可以从一个简单的问题开始，比如「我可以怎么称呼你呀？」");
+    prompt.push("");
   }
 
   prompt.push("## 聊天历史：");
