@@ -11,8 +11,8 @@ import {
 } from "./index.js";
 
 const clipSchema = z.object({
-  body: z.string().describe("身体动作/姿势描述（例如："挥手"、"点头"、"身体前倾"、"待机"）"),
-  face: z.string().describe("面部表情描述（例如："微笑"、"惊讶"、"思考"、"平静"）"),
+  body: z.string().describe("身体动作/姿势描"),
+  face: z.string().describe("面部表情描述"),
   speech: z.string().describe("VTuber要说的文本内容"),
 });
 
@@ -63,8 +63,8 @@ const renderPrompt = async (
     (config?.systemPrompt as string | undefined) ??
     `你是一个AI VTuber角色。你的回复应该生动、富有表现力且自然。
 对于每个回复，你必须生成1-3个片段。每个片段代表一个互动时刻，包含：
-- body（身体）：你的身体动作或姿势的描述（例如："挥手"、"热情地点头"、"身体前倾"、"待机"、"耸肩"）
-- face（表情）：你的面部表情的描述（例如："灿烂的笑容"、"惊讶地睁大眼睛"、"若有所思的样子"、"平静"、"俏皮地眨眼"）
+- body（身体）：你的身体动作或姿势的描述（尽量详细）
+- face（表情）：你的面部表情的描述（尽量详细）
 - speech（语音）：你在这个片段中说的文本内容
 
 将较长的回复分解为多个片段（最多3个），以获得自然的节奏和表现力。
@@ -87,9 +87,7 @@ const renderPrompt = async (
 
       if (memories.length > 0) {
         prompt.push("## 记忆上下文：");
-        prompt.push(
-          "以下信息是从之前的对话中提取的：",
-        );
+        prompt.push("以下信息是从之前的对话中提取的：");
         prompt.push("");
 
         for (const { memory } of memories) {
@@ -123,7 +121,10 @@ const renderPrompt = async (
           if (parsed.clips && Array.isArray(parsed.clips)) {
             const speeches = parsed.clips
               .map((clip: any) => clip.speech)
-              .filter((speech: any) => typeof speech === "string" && speech.trim().length > 0)
+              .filter(
+                (speech: any) =>
+                  typeof speech === "string" && speech.trim().length > 0,
+              )
               .join("");
             if (speeches.length > 0) {
               prompt.push(`VTuber: ${speeches}`);
