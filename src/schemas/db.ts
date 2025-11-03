@@ -137,7 +137,7 @@ export const memory = pgTable(
         "USER_PREFERENCE",
         "USER_GOAL",
         "USER_RELATIONSHIP",
-        "USER_EVENT",
+        "EVENT",
         "OTHER",
       ],
     }),
