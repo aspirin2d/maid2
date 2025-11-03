@@ -1,5 +1,6 @@
 import { handleAuth, handleLogout } from "./auth.js";
 import { browseStories } from "./stories.js";
+import { browseMemories } from "./memories.js";
 import {
   executeWithSession,
   isLoggedIn,
@@ -41,6 +42,14 @@ const COMMANDS: CommandDefinition[] = [
     isVisible: isLoggedIn,
     handler: async ({ session }) => {
       await executeWithSession(session, browseStories);
+    },
+  },
+  {
+    name: "/memory",
+    description: "Browse and delete your memories",
+    isVisible: isLoggedIn,
+    handler: async ({ session }) => {
+      await executeWithSession(session, browseMemories);
     },
   },
   {
