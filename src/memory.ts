@@ -124,15 +124,15 @@ export async function searchSimilarMemories(
 
 /**
  * Insert a single memory with automatic embedding generation
- * Takes memory data without embedding and generates embedding from content
+ * If embedding is provided, uses it; otherwise generates from content
  *
  * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
- * @param memoryData - Memory data without embedding (must have content field)
+ * @param memoryData - Memory data with or without embedding (must have content field if no embedding)
  * @returns Inserted memory record with embedding, or null if content is empty
  */
 export async function insertMemory(
   provider: Provider,
-  memoryData: Omit<MemoryInsert, "embedding">,
+  memoryData: Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">,
 ) {
   const result = await insertMemories(provider, [memoryData]);
   return result.length > 0 ? result[0] : null;
@@ -153,41 +153,62 @@ export async function createMemory(memoryData: MemoryInsert) {
 
 /**
  * Insert memories with automatic embedding generation
- * Takes memory data without embeddings and generates embeddings from content
+ * If embedding is provided, uses it; otherwise generates from content
  *
  * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
- * @param memories - Array of memory data without embeddings (must have content field)
+ * @param memories - Array of memory data with or without embeddings (must have content field if no embedding)
  * @returns Array of inserted memory records with embeddings
  */
 export async function insertMemories(
   provider: Provider,
-  memories: Array<Omit<MemoryInsert, "embedding">>,
+  memories: Array<Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">>,
 ) {
-  // Filter out memories without content
-  const validMemories = memories.filter(
-    (mem) => mem.content && mem.content.trim().length > 0,
-  );
+  // Separate memories into those with and without embeddings
+  const withEmbeddings: MemoryInsert[] = [];
+  const withoutEmbeddings: Array<Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">> = [];
 
-  if (validMemories.length === 0) {
+  for (const mem of memories) {
+    // Skip memories without content
+    if (!mem.content || mem.content.trim().length === 0) {
+      continue;
+    }
+
+    if (mem.embedding) {
+      // Already has embedding, use it directly
+      withEmbeddings.push(mem as MemoryInsert);
+    } else {
+      // Needs embedding generation
+      withoutEmbeddings.push(mem);
+    }
+  }
+
+  // Generate embeddings for memories that need them
+  let newlyEmbedded: MemoryInsert[] = [];
+  if (withoutEmbeddings.length > 0) {
+    // Extract content texts for embedding
+    const texts = withoutEmbeddings.map((mem) => mem.content!);
+
+    // Generate embeddings for all texts in bulk
+    const embeddings = await embedTexts(provider, texts);
+
+    // Map embeddings back to memory objects
+    newlyEmbedded = withoutEmbeddings.map(
+      (mem, index) => ({
+        ...mem,
+        embedding: embeddings[index],
+      } as MemoryInsert),
+    );
+  }
+
+  // Combine all memories with embeddings
+  const allMemories = [...withEmbeddings, ...newlyEmbedded];
+
+  if (allMemories.length === 0) {
     return [];
   }
 
-  // Extract content texts for embedding
-  const texts = validMemories.map((mem) => mem.content!);
-
-  // Generate embeddings for all texts in bulk
-  const embeddings = await embedTexts(provider, texts);
-
-  // Map embeddings back to memory objects
-  const memoriesWithEmbeddings: MemoryInsert[] = validMemories.map(
-    (mem, index) => ({
-      ...mem,
-      embedding: embeddings[index],
-    }),
-  );
-
   // Bulk insert all memories
-  return await bulkInsertMemories(memoriesWithEmbeddings);
+  return await bulkInsertMemories(allMemories);
 }
 
 /**
