@@ -8,6 +8,7 @@ export type JSONSchema = Record<string, JsonValue>;
 // Per-request context provided to handler factories
 export interface StoryContext {
   story: number;
+  userId: string;
   provider?: "openai" | "ollama";
 }
 
@@ -96,7 +97,7 @@ export function registerStoryHandler(
 
   // Validate factory implementation by creating a test instance
   try {
-    const testCtx: StoryContext = { story: 0, provider: "openai" };
+    const testCtx: StoryContext = { story: 0, userId: "test", provider: "openai" };
     const handler = factory(testCtx);
 
     const requiredMethods: (keyof StoryHandler)[] = [
@@ -153,7 +154,7 @@ export function getHandlerMetadata(name: string): HandlerMetadata | undefined {
 
   // Fallback: instantiate handler and check if it provides metadata
   try {
-    const testCtx: StoryContext = { story: 0, provider: "openai" };
+    const testCtx: StoryContext = { story: 0, userId: "test", provider: "openai" };
     const handler = entry.factory(testCtx);
     if (handler.getMetadata) {
       return handler.getMetadata();
