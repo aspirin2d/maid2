@@ -122,20 +122,6 @@ export const message = pgTable(
   ],
 );
 
-export const userMessages = pgView("user_messages").as((qb) =>
-  qb
-    .select({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      extracted: message.extracted,
-      createdAt: message.createdAt,
-    })
-    .from(message)
-    .innerJoin(story, eq(message.storyId, story.id))
-    .innerJoin(user, eq(story.userId, user.id)),
-);
-
 export const memory = pgTable(
   "memory",
   {
@@ -159,7 +145,6 @@ export const memory = pgTable(
     }),
     importance: real("importance"), // 0-1 scale
     confidence: real("confidence"), // 0-1 scale
-
     action: text("action", { enum: ["ADD", "UPDATE", "DELETE"] }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
