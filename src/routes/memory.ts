@@ -75,6 +75,7 @@ memoryRoute.post("/extract", async (c) => {
     return c.json({
       factsExtracted: result.factsExtracted,
       memoriesUpdated: result.memoriesUpdated,
+      messagesExtracted: result.messagesExtracted,
     });
   } catch (error) {
     console.error("Failed to extract memories", error);

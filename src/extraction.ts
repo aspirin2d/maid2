@@ -28,12 +28,12 @@ import z from "zod";
  *
  * @param userId - The user ID to extract memories for
  * @param provider - LLM provider to use ("openai" or "ollama")
- * @returns Object containing extracted facts count and updated memories count
+ * @returns Object containing extracted facts count, updated memories count, and extracted messages count
  */
 export async function extractMemoriesForUser(
   userId: string,
   provider: Provider,
-): Promise<{ factsExtracted: number; memoriesUpdated: number }> {
+): Promise<{ factsExtracted: number; memoriesUpdated: number; messagesExtracted: number }> {
   // Step 1: Fetch unextracted messages from the given user
   const unextractedMessages = await getMessagesByUser(userId, {
     extracted: false,
@@ -41,7 +41,7 @@ export async function extractMemoriesForUser(
 
   // If no unextracted messages, return early
   if (unextractedMessages.length === 0) {
-    return { factsExtracted: 0, memoriesUpdated: 0 };
+    return { factsExtracted: 0, memoriesUpdated: 0, messagesExtracted: 0 };
   }
 
   // Parse messages into a single string for fact extraction
@@ -72,7 +72,7 @@ export async function extractMemoriesForUser(
   // If no facts extracted, mark messages as extracted and return
   if (parsedFacts.facts.length === 0) {
     await markMessagesAsExtracted(unextractedMessages.map((msg) => msg.id));
-    return { factsExtracted: 0, memoriesUpdated: 0 };
+    return { factsExtracted: 0, memoriesUpdated: 0, messagesExtracted: unextractedMessages.length };
   }
 
   // Step 3: Prepare similarity context (with unified IDs: 1, 2, 3...)
@@ -215,6 +215,7 @@ export async function extractMemoriesForUser(
     return {
       factsExtracted: parsedFacts.facts.length,
       memoriesUpdated: memoriesUpdated,
+      messagesExtracted: unextractedMessages.length,
     };
   } catch (error) {
     await client.query("ROLLBACK");
