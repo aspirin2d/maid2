@@ -181,3 +181,4 @@ export function listHandlersWithMetadata(): Array<{
 
 // Register built-in handlers lazily to avoid circular TDZ issues.
 void import("./simple.js");
+void import("./live.js");
