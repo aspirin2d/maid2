@@ -179,6 +179,7 @@ type MenuResult<T = any> =
 export interface MenuPromptConfig<T = any> {
   message?: string;
   choices: Choice<T>[];
+  disabledActions?: ("create" | "edit" | "delete" | "extract")[];
 }
 
 const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
@@ -211,20 +212,30 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
       }
 
       const k = (key.name || "").toLowerCase();
+      const disabledActions = config.disabledActions || [];
+
       if (k === "a" || k === "c") {
-        done({ action: "create", item: currentChoice });
+        if (!disabledActions.includes("create")) {
+          done({ action: "create", item: currentChoice });
+        }
         return;
       }
       if (k === "d" || k === "x") {
-        done({ action: "delete", item: currentChoice });
+        if (!disabledActions.includes("delete")) {
+          done({ action: "delete", item: currentChoice });
+        }
         return;
       }
       if (k === "e") {
-        done({ action: "edit", item: currentChoice });
+        if (!disabledActions.includes("edit")) {
+          done({ action: "edit", item: currentChoice });
+        }
         return;
       }
       if (k === "t") {
-        done({ action: "extract", item: currentChoice });
+        if (!disabledActions.includes("extract")) {
+          done({ action: "extract", item: currentChoice });
+        }
         return;
       }
       if (isEnterKey(key)) {
@@ -242,8 +253,24 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
       const caret = index === cursor ? "❯" : " ";
       return `${caret} ${choice.name}`;
     });
-    const help =
-      "↑/↓ move   Enter=chat   e=edit   a/c=create   d/x=delete   t=extract   Esc=cancel";
+
+    const disabledActions = config.disabledActions || [];
+    const helpParts = ["↑/↓ move", "Enter=chat"];
+    if (!disabledActions.includes("edit")) {
+      helpParts.push("e=edit");
+    }
+    if (!disabledActions.includes("create")) {
+      helpParts.push("a/c=create");
+    }
+    if (!disabledActions.includes("delete")) {
+      helpParts.push("d/x=delete");
+    }
+    if (!disabledActions.includes("extract")) {
+      helpParts.push("t=extract");
+    }
+    helpParts.push("Esc=cancel");
+    const help = helpParts.join("   ");
+
     return [`${prefix} ${message}`, ...lines, "", help].join("\n");
   },
 );

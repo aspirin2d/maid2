@@ -1,4 +1,5 @@
 import { confirm, input, select } from "@inquirer/prompts";
+import { createPrompt, useKeypress } from "@inquirer/core";
 
 import {
   extractErrorMessage,
@@ -15,6 +16,17 @@ import {
 } from "./core.js";
 import type { MemoryCategory } from "../shared-types.js";
 import { MEMORY_CATEGORIES } from "../shared-types.js";
+
+// Helper prompt to wait for any key press
+const waitForKeyPress = createPrompt<void, { message: string }>(
+  (config, done) => {
+    useKeypress(() => {
+      done();
+    });
+
+    return config.message;
+  },
+);
 
 // Helper function to format category names for display
 function formatCategoryName(category: MemoryCategory): string {
@@ -52,7 +64,8 @@ type MemoryMenuResult =
   | { type: "create" }
   | { type: "edit"; memory: MemoryRecord }
   | { type: "delete"; memory: MemoryRecord }
-  | { type: "extract" };
+  | { type: "extract" }
+  | { type: "view"; memory: MemoryRecord };
 
 // ============================================================================
 // Memory Management
@@ -133,6 +146,19 @@ async function browseMemories(token: string) {
         console.log(`✅ Extraction complete!`);
         console.log(`   Facts extracted: ${result.factsExtracted}`);
         console.log(`   Memories updated: ${result.memoriesUpdated}`);
+      }
+      continue;
+    }
+
+    if (action.type === "view") {
+      printMemoryDetails(action.memory);
+      try {
+        await waitForKeyPress({ message: "\nPress any key to continue..." });
+      } catch (error) {
+        // User cancelled with Ctrl+C, that's fine
+        if (!isPromptAbortError(error)) {
+          throw error;
+        }
       }
       continue;
     }
@@ -428,12 +454,12 @@ async function memoryMenuPrompt(
     return { type: "extract" };
   }
 
-  // For "open" action, just show the memory details
+  // For "open" action, return view action to show details
   if (menu.action === "open") {
-    printMemoryDetails(selected);
+    return { type: "view", memory: selected };
   }
 
-  // Return to the menu after viewing details
+  // Fallback
   return { type: "exit" };
 }
 
