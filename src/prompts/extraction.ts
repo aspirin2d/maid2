@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MEMORY_CATEGORIES } from "../types.js";
 
 // Define Zod schema for fact retrieval output
 export const FactRetrievalSchema = z.object({
@@ -7,14 +8,7 @@ export const FactRetrievalSchema = z.object({
       z.object({
         text: z.string().describe("The fact about the user"),
         category: z
-          .enum([
-            "USER_INFO",
-            "USER_PREFERENCE",
-            "USER_GOAL",
-            "USER_RELATIONSHIP",
-            "EVENT",
-            "OTHER",
-          ])
+          .enum(MEMORY_CATEGORIES)
           .describe("The category of the fact"),
         importance: z
           .number()

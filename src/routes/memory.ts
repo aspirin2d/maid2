@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
+import { MEMORY_CATEGORIES } from "../types.js";
 import { getMemoriesByUser, deleteMemory, insertMemory, updateMemory } from "../memory.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { formatZodError } from "../validation.js";
@@ -15,14 +16,7 @@ type Provider = z.infer<typeof providerEnum>;
 
 const DEFAULT_PROVIDER: Provider = "openai";
 
-const memoryCategoryEnum = z.enum([
-  "USER_INFO",
-  "USER_PREFERENCE",
-  "USER_GOAL",
-  "USER_RELATIONSHIP",
-  "EVENT",
-  "OTHER",
-]);
+const memoryCategoryEnum = z.enum(MEMORY_CATEGORIES);
 
 const createMemorySchema = z.strictObject({
   content: z.string().trim().min(1, "Memory content is required"),

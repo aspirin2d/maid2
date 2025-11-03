@@ -13,15 +13,25 @@ import {
   APP_BASE_URL,
   AUTH_BASE_URL,
 } from "./core.js";
+import type { MemoryCategory } from "../src/types.js";
+import { MEMORY_CATEGORIES } from "../src/types.js";
 
-// Memory category type
-type MemoryCategory =
-  | "USER_INFO"
-  | "USER_PREFERENCE"
-  | "USER_GOAL"
-  | "USER_RELATIONSHIP"
-  | "EVENT"
-  | "OTHER";
+// Helper function to format category names for display
+function formatCategoryName(category: MemoryCategory): string {
+  return category
+    .split("_")
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+// Generate category choices from centralized constant
+const CATEGORY_CHOICES = [
+  { name: "None", value: null as MemoryCategory | null },
+  ...MEMORY_CATEGORIES.map((cat) => ({
+    name: formatCategoryName(cat),
+    value: cat as MemoryCategory,
+  })),
+];
 
 // Memory record type
 export type MemoryRecord = {
@@ -133,15 +143,7 @@ async function promptAndCreateMemory(
 
     const categoryChoice = await select<MemoryCategory | null>({
       message: "Select category (optional):",
-      choices: [
-        { name: "None", value: null },
-        { name: "User Info", value: "USER_INFO" },
-        { name: "User Preference", value: "USER_PREFERENCE" },
-        { name: "User Goal", value: "USER_GOAL" },
-        { name: "User Relationship", value: "USER_RELATIONSHIP" },
-        { name: "Event", value: "EVENT" },
-        { name: "Other", value: "OTHER" },
-      ],
+      choices: CATEGORY_CHOICES,
       default: null,
     });
 
@@ -174,15 +176,7 @@ async function promptAndEditMemory(
 
     const categoryChoice = await select<MemoryCategory | null>({
       message: "Select category (optional):",
-      choices: [
-        { name: "None", value: null },
-        { name: "User Info", value: "USER_INFO" },
-        { name: "User Preference", value: "USER_PREFERENCE" },
-        { name: "User Goal", value: "USER_GOAL" },
-        { name: "User Relationship", value: "USER_RELATIONSHIP" },
-        { name: "Event", value: "EVENT" },
-        { name: "Other", value: "OTHER" },
-      ],
+      choices: CATEGORY_CHOICES,
       default: memory.category,
     });
 
