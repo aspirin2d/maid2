@@ -1,7 +1,7 @@
 import { and, cosineDistance, desc, eq, isNotNull } from "drizzle-orm";
 import db from "./db.js";
 import { memory } from "./schemas/db.js";
-import { embedTexts, Provider } from "./llm.js";
+import { embedTexts, type Provider } from "./llm.js";
 
 type MemoryInsert = typeof memory.$inferInsert;
 type MemorySelect = typeof memory.$inferSelect;
@@ -98,22 +98,21 @@ export async function searchSimilarMemories(
     .$dynamic();
 
   // Apply filters
-  const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+  const whereClause =
+    conditions.length === 1 ? conditions[0] : and(...conditions);
   query = query.where(whereClause);
 
   // Order by similarity (lower distance = higher similarity)
   // Note: We limit to topK first, then filter by minSimilarity
   // This returns the top K most similar results that meet the threshold
-  const results = await query
-    .orderBy(distance)
-    .limit(topK);
+  const results = await query.orderBy(distance).limit(topK);
 
   // Convert distance to similarity score and filter by minimum similarity
   return results
     .map((row) => {
       // Convert cosine distance to similarity (0-1 scale)
       // cosineDistance returns values typically in range [0, 2]
-      const similarity = 1 - (Number(row.distance) / 2);
+      const similarity = 1 - Number(row.distance) / 2;
       return {
         memory: row.memory,
         similarity,
@@ -143,10 +142,7 @@ export async function insertMemory(
  * Note: Use insertMemory() if you need automatic embedding generation
  */
 export async function createMemory(memoryData: MemoryInsert) {
-  const inserted = await db
-    .insert(memory)
-    .values(memoryData)
-    .returning();
+  const inserted = await db.insert(memory).values(memoryData).returning();
 
   return inserted[0];
 }
@@ -161,11 +157,15 @@ export async function createMemory(memoryData: MemoryInsert) {
  */
 export async function insertMemories(
   provider: Provider,
-  memories: Array<Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">>,
+  memories: Array<
+    Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">
+  >,
 ) {
   // Separate memories into those with and without embeddings
   const withEmbeddings: MemoryInsert[] = [];
-  const withoutEmbeddings: Array<Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">> = [];
+  const withoutEmbeddings: Array<
+    Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">
+  > = [];
 
   for (const mem of memories) {
     // Skip memories without content
@@ -196,10 +196,11 @@ export async function insertMemories(
     // Map embeddings back to memory objects
     // Type assertion is safe: db auto-generates id, createdAt, updatedAt
     newlyEmbedded = withoutEmbeddings.map(
-      (mem, index) => ({
-        ...mem,
-        embedding: embeddings[index],
-      } as MemoryInsert),
+      (mem, index) =>
+        ({
+          ...mem,
+          embedding: embeddings[index],
+        }) as MemoryInsert,
     );
   }
 
@@ -221,10 +222,7 @@ export async function insertMemories(
 export async function bulkInsertMemories(memories: MemoryInsert[]) {
   if (memories.length === 0) return [];
 
-  const inserted = await db
-    .insert(memory)
-    .values(memories)
-    .returning();
+  const inserted = await db.insert(memory).values(memories).returning();
 
   return inserted;
 }
@@ -249,21 +247,21 @@ export async function getMemoriesByUser(
   const whereClause =
     conditions.length === 1 ? conditions[0] : and(...conditions);
 
-  let query = db
+  const baseQuery = db
     .select()
     .from(memory)
     .where(whereClause)
     .orderBy(desc(memory.createdAt));
 
-  if (options?.limit !== undefined) {
-    query = query.limit(options.limit);
-  }
+  const limitedQuery =
+    options?.limit !== undefined ? baseQuery.limit(options.limit) : baseQuery;
 
-  if (options?.offset !== undefined) {
-    query = query.offset(options.offset);
-  }
+  const offsetQuery =
+    options?.offset !== undefined
+      ? limitedQuery.offset(options.offset)
+      : limitedQuery;
 
-  return await query;
+  return await offsetQuery;
 }
 
 /**
