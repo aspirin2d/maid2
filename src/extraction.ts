@@ -2,8 +2,17 @@ import { eq } from "drizzle-orm";
 import db, { pool } from "./db.js";
 import { message } from "./schemas/db.js";
 import { getMessagesByUser } from "./message.js";
-import { embedTexts, type Provider, streamOpenAIStructured, streamOllamaStructured } from "./llm.js";
-import { bulkSearchSimilarMemories, insertMemories, updateMemory } from "./memory.js";
+import {
+  embedTexts,
+  type Provider,
+  streamOpenAIStructured,
+  streamOllamaStructured,
+} from "./llm.js";
+import {
+  bulkSearchSimilarMemories,
+  insertMemories,
+  updateMemory,
+} from "./memory.js";
 import {
   getFactRetrievalMessages,
   getUpdateMemoryMessages,
@@ -11,6 +20,7 @@ import {
   MemoryUpdateSchema,
   parseMessages,
 } from "./prompts/extraction.js";
+import z from "zod";
 
 /**
  * Memory extraction helper function
@@ -45,13 +55,14 @@ export async function extractMemoriesForUser(
   const factExtractionPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
   let factExtractionResult = "";
-  const streamFn = provider === "openai" ? streamOpenAIStructured : streamOllamaStructured;
+  const streamFn =
+    provider === "openai" ? streamOpenAIStructured : streamOllamaStructured;
 
   for await (const event of streamFn({
     prompt: factExtractionPrompt,
     format: {
       name: "fact_retrieval",
-      schema: FactRetrievalSchema.shape,
+      schema: z.toJSONSchema(FactRetrievalSchema),
     },
   })) {
     if (event.type === "delta") {
@@ -62,7 +73,9 @@ export async function extractMemoriesForUser(
   }
 
   // Parse extracted facts
-  const parsedFacts = FactRetrievalSchema.parse(JSON.parse(factExtractionResult));
+  const parsedFacts = FactRetrievalSchema.parse(
+    JSON.parse(factExtractionResult),
+  );
 
   // If no facts extracted, mark messages as extracted and return
   if (parsedFacts.facts.length === 0) {
@@ -127,7 +140,7 @@ export async function extractMemoriesForUser(
     prompt: memoryUpdatePrompt,
     format: {
       name: "memory_update",
-      schema: MemoryUpdateSchema.shape,
+      schema: z.toJSONSchema(MemoryUpdateSchema),
     },
   })) {
     if (event.type === "delta") {
@@ -138,7 +151,9 @@ export async function extractMemoriesForUser(
   }
 
   // Parse memory update decisions
-  const parsedDecisions = MemoryUpdateSchema.parse(JSON.parse(memoryUpdateResult));
+  const parsedDecisions = MemoryUpdateSchema.parse(
+    JSON.parse(memoryUpdateResult),
+  );
 
   // Step 5: Apply memory decisions and mark messages (within transaction)
   const client = await pool.connect();
@@ -173,7 +188,8 @@ export async function extractMemoriesForUser(
         // Find the corresponding existing memory by unified ID
         const memoryIndex = decisionId - 1;
         if (memoryIndex >= 0 && memoryIndex < unifiedExistingMemories.length) {
-          const originalMemoryId = unifiedExistingMemories[memoryIndex].originalId;
+          const originalMemoryId =
+            unifiedExistingMemories[memoryIndex].originalId;
 
           // Find the matching fact (if any) to get updated metadata
           // For UPDATE events, we need to find which fact triggered this update
@@ -181,7 +197,9 @@ export async function extractMemoriesForUser(
           const fact = parsedFacts.facts[0]; // TODO: Improve this mapping logic
 
           // Generate embedding for updated content
-          const [updatedEmbedding] = await embedTexts(provider, [decision.text]);
+          const [updatedEmbedding] = await embedTexts(provider, [
+            decision.text,
+          ]);
 
           // Update the memory
           await updateMemory(originalMemoryId, {
