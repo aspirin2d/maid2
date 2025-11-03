@@ -1,6 +1,7 @@
 import { and, cosineDistance, desc, eq, sql } from "drizzle-orm";
 import db from "./db.js";
 import { memory } from "./schemas/db.js";
+import { embedTexts, Provider } from "./llm.js";
 
 type MemoryInsert = typeof memory.$inferInsert;
 type MemorySelect = typeof memory.$inferSelect;
@@ -122,7 +123,24 @@ export async function searchSimilarMemories(
 }
 
 /**
+ * Insert a single memory with automatic embedding generation
+ * Takes memory data without embedding and generates embedding from content
+ *
+ * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
+ * @param memoryData - Memory data without embedding (must have content field)
+ * @returns Inserted memory record with embedding, or null if content is empty
+ */
+export async function insertMemory(
+  provider: Provider,
+  memoryData: Omit<MemoryInsert, "embedding">,
+) {
+  const result = await insertMemories(provider, [memoryData]);
+  return result.length > 0 ? result[0] : null;
+}
+
+/**
  * Create a new memory with embedding
+ * Note: Use insertMemory() if you need automatic embedding generation
  */
 export async function createMemory(memoryData: MemoryInsert) {
   const inserted = await db
@@ -131,6 +149,45 @@ export async function createMemory(memoryData: MemoryInsert) {
     .returning();
 
   return inserted[0];
+}
+
+/**
+ * Insert memories with automatic embedding generation
+ * Takes memory data without embeddings and generates embeddings from content
+ *
+ * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
+ * @param memories - Array of memory data without embeddings (must have content field)
+ * @returns Array of inserted memory records with embeddings
+ */
+export async function insertMemories(
+  provider: Provider,
+  memories: Array<Omit<MemoryInsert, "embedding">>,
+) {
+  // Filter out memories without content
+  const validMemories = memories.filter(
+    (mem) => mem.content && mem.content.trim().length > 0,
+  );
+
+  if (validMemories.length === 0) {
+    return [];
+  }
+
+  // Extract content texts for embedding
+  const texts = validMemories.map((mem) => mem.content!);
+
+  // Generate embeddings for all texts in bulk
+  const embeddings = await embedTexts(provider, texts);
+
+  // Map embeddings back to memory objects
+  const memoriesWithEmbeddings: MemoryInsert[] = validMemories.map(
+    (mem, index) => ({
+      ...mem,
+      embedding: embeddings[index],
+    }),
+  );
+
+  // Bulk insert all memories
+  return await bulkInsertMemories(memoriesWithEmbeddings);
 }
 
 /**
