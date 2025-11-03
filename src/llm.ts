@@ -73,7 +73,9 @@ export async function embedText(
 ): Promise<number[]> {
   const embeddings = await embedTexts(provider, [text], dims);
   if (embeddings.length === 0) {
-    throw new Error("Failed to generate embedding: embedTexts returned empty array");
+    throw new Error(
+      "Failed to generate embedding: embedTexts returned empty array",
+    );
   }
   return embeddings[0];
 }

@@ -1,16 +1,13 @@
-import { eq } from "drizzle-orm";
 import {
+  boolean,
+  index,
+  integer,
   pgTable,
+  real,
+  serial,
   text,
   timestamp,
-  boolean,
-  serial,
-  integer,
-  pgView,
-  index,
-  real,
 } from "drizzle-orm/pg-core";
-import type { int } from "zod";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
