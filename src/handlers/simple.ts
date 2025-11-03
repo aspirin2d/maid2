@@ -8,7 +8,7 @@ import {
   type HandlerMetadata,
 } from "./index.js";
 
-const schema = z.object({
+const outputSchema = z.object({
   response: z.string().meta({ description: "Assistant's response." }),
 });
 
@@ -93,7 +93,7 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
       userInput = input;
       return {
         prompt: await renderPrompt(input, ctx, config),
-        schema,
+        schema: outputSchema,
       };
     },
     onStart() {
@@ -125,7 +125,7 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
           "Simple conversational handler with chat history and configurable system prompt",
         version: "1.0.0",
         inputSchema,
-        outputSchema: schema,
+        outputSchema,
         capabilities: {
           supportsThinking: true,
           requiresHistory: true,
@@ -142,7 +142,7 @@ const metadata: HandlerMetadata = {
     "Simple conversational handler with chat history and configurable system prompt",
   version: "1.0.0",
   inputSchema,
-  outputSchema: schema,
+  outputSchema,
   capabilities: {
     supportsThinking: true,
     requiresHistory: true,
