@@ -144,6 +144,7 @@ async function browseMemories(token: string) {
       const result = await extractMemoriesRequest(token);
       if (result) {
         console.log(`✅ Extraction complete!`);
+        console.log(`   Messages extracted: ${result.messagesExtracted}`);
         console.log(`   Facts extracted: ${result.factsExtracted}`);
         console.log(`   Memories updated: ${result.memoriesUpdated}`);
       }
@@ -367,7 +368,7 @@ async function updateMemoryRequest(
 
 async function extractMemoriesRequest(
   token: string,
-): Promise<{ factsExtracted: number; memoriesUpdated: number } | null> {
+): Promise<{ factsExtracted: number; memoriesUpdated: number; messagesExtracted: number } | null> {
   const response = await safeFetch(
     "/api/mem/extract",
     {
@@ -391,11 +392,13 @@ async function extractMemoriesRequest(
   const result = await parseJSON<{
     factsExtracted?: number;
     memoriesUpdated?: number;
+    messagesExtracted?: number;
   }>(response);
 
   return {
     factsExtracted: result?.factsExtracted ?? 0,
     memoriesUpdated: result?.memoriesUpdated ?? 0,
+    messagesExtracted: result?.messagesExtracted ?? 0,
   };
 }
 
