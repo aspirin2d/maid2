@@ -51,8 +51,7 @@ export async function extractMemoriesForUser(
   const parsedMessages = parseMessages(messageContents);
 
   // Step 2: Extract facts from conversation with LLM
-  const [systemPrompt, userPrompt] = getFactRetrievalMessages(parsedMessages);
-  const factExtractionPrompt = `${systemPrompt}\n\n${userPrompt}`;
+  const factExtractionPrompt = getFactRetrievalMessages(parsedMessages);
 
   let factExtractionResult = "";
   const streamFn =
