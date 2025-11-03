@@ -133,7 +133,7 @@ export const memory = pgTable(
 
     // Memory metadata fields
     category: text("category", {
-      enum: MEMORY_CATEGORIES as unknown as [string, ...string[]],
+      enum: MEMORY_CATEGORIES,
     }),
     importance: real("importance"), // 0-1 scale
     confidence: real("confidence"), // 0-1 scale
