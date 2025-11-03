@@ -8,7 +8,9 @@ import {
   integer,
   pgView,
   index,
+  real,
 } from "drizzle-orm/pg-core";
+import type { int } from "zod";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -88,10 +90,10 @@ export const story = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => ({
+  (table) => [
     // Index for finding stories by user
-    userIdIdx: index("story_user_id_idx").on(table.userId),
-  }),
+    index("story_user_id_idx").on(table.userId),
+  ],
 );
 
 export const message = pgTable(
@@ -110,17 +112,14 @@ export const message = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => ({
+  (table) => [
     // Index for finding messages by story (most common query)
-    storyIdIdx: index("message_story_id_idx").on(table.storyId),
+    index("message_story_id_idx").on(table.storyId),
     // Index for filtering by extracted flag
-    extractedIdx: index("message_extracted_idx").on(table.extracted),
+    index("message_extracted_idx").on(table.extracted),
     // Composite index for story + extracted queries (even faster)
-    storyExtractedIdx: index("message_story_extracted_idx").on(
-      table.storyId,
-      table.extracted,
-    ),
-  }),
+    index("message_story_extracted_idx").on(table.storyId, table.extracted),
+  ],
 );
 
 export const userMessages = pgView("user_messages").as((qb) =>
@@ -135,4 +134,38 @@ export const userMessages = pgView("user_messages").as((qb) =>
     .from(message)
     .innerJoin(story, eq(message.storyId, story.id))
     .innerJoin(user, eq(story.userId, user.id)),
+);
+
+export const memory = pgTable(
+  "memory",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    content: text("content"),
+    prevContent: text("previous_content"),
+
+    // Memory metadata fields
+    category: text("category", {
+      enum: [
+        "USER_INFO",
+        "USER_PREFERENCE",
+        "USER_GOAL",
+        "USER_RELATIONSHIP",
+        "USER_EVENT",
+        "OTHER",
+      ],
+    }),
+    importance: real("importance"), // 0-1 scale
+    confidence: real("confidence"), // 0-1 scale
+
+    action: text("action", { enum: ["ADD", "UPDATE", "DELETE"] }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("memory_user_idx").on(table.userId)],
 );
