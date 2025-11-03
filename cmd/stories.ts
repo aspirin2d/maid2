@@ -282,6 +282,7 @@ async function storyMenuPrompt(
         name: `[${story.id}] ${story.name}`,
         value: story,
       })),
+      disabledActions: ["extract"],
     });
   } catch (error) {
     if (isPromptAbortError(error)) {
