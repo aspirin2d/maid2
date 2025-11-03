@@ -1,4 +1,4 @@
-import { and, cosineDistance, desc, eq, sql } from "drizzle-orm";
+import { and, cosineDistance, desc, eq, isNotNull } from "drizzle-orm";
 import db from "./db.js";
 import { memory } from "./schemas/db.js";
 import { embedTexts, Provider } from "./llm.js";
@@ -76,7 +76,7 @@ export async function searchSimilarMemories(
   const minSimilarity = options?.minSimilarity ?? 0;
 
   // Build where conditions
-  const conditions = [];
+  const conditions: any[] = [isNotNull(memory.embedding)];
   if (options?.userId) {
     conditions.push(eq(memory.userId, options.userId));
   }
@@ -97,13 +97,13 @@ export async function searchSimilarMemories(
     .from(memory)
     .$dynamic();
 
-  // Apply filters if any
-  if (conditions.length > 0) {
-    const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
-    query = query.where(whereClause);
-  }
+  // Apply filters
+  const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+  query = query.where(whereClause);
 
   // Order by similarity (lower distance = higher similarity)
+  // Note: We limit to topK first, then filter by minSimilarity
+  // This returns the top K most similar results that meet the threshold
   const results = await query
     .orderBy(distance)
     .limit(topK);
@@ -127,7 +127,7 @@ export async function searchSimilarMemories(
  * If embedding is provided, uses it; otherwise generates from content
  *
  * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
- * @param memoryData - Memory data with or without embedding (must have content field if no embedding)
+ * @param memoryData - Memory data with or without embedding (userId and content are required)
  * @returns Inserted memory record with embedding, or null if content is empty
  */
 export async function insertMemory(
@@ -156,7 +156,7 @@ export async function createMemory(memoryData: MemoryInsert) {
  * If embedding is provided, uses it; otherwise generates from content
  *
  * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
- * @param memories - Array of memory data with or without embeddings (must have content field if no embedding)
+ * @param memories - Array of memory data with or without embeddings (userId and content are required)
  * @returns Array of inserted memory records with embeddings
  */
 export async function insertMemories(
@@ -175,6 +175,8 @@ export async function insertMemories(
 
     if (mem.embedding) {
       // Already has embedding, use it directly
+      // Type assertion is safe: db auto-generates id, createdAt, updatedAt
+      // All other fields (except userId) are optional in schema
       withEmbeddings.push(mem as MemoryInsert);
     } else {
       // Needs embedding generation
@@ -192,6 +194,7 @@ export async function insertMemories(
     const embeddings = await embedTexts(provider, texts);
 
     // Map embeddings back to memory objects
+    // Type assertion is safe: db auto-generates id, createdAt, updatedAt
     newlyEmbedded = withoutEmbeddings.map(
       (mem, index) => ({
         ...mem,
@@ -237,7 +240,7 @@ export async function getMemoriesByUser(
     offset?: number;
   },
 ) {
-  const conditions = [eq(memory.userId, userId)];
+  const conditions: any[] = [eq(memory.userId, userId)];
 
   if (options?.category) {
     conditions.push(eq(memory.category, options.category));
