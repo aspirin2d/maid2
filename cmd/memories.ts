@@ -51,7 +51,8 @@ type MemoryMenuResult =
   | { type: "exit" }
   | { type: "create" }
   | { type: "edit"; memory: MemoryRecord }
-  | { type: "delete"; memory: MemoryRecord };
+  | { type: "delete"; memory: MemoryRecord }
+  | { type: "extract" };
 
 // ============================================================================
 // Memory Management
@@ -121,6 +122,17 @@ async function browseMemories(token: string) {
       const deleted = await deleteMemoryRequest(token, action.memory.id);
       if (deleted) {
         console.log(`✅ Deleted memory ${action.memory.id}.`);
+      }
+      continue;
+    }
+
+    if (action.type === "extract") {
+      console.log("🔄 Extracting memories from messages...");
+      const result = await extractMemoriesRequest(token);
+      if (result) {
+        console.log(`✅ Extraction complete!`);
+        console.log(`   Facts extracted: ${result.factsExtracted}`);
+        console.log(`   Memories updated: ${result.memoriesUpdated}`);
       }
       continue;
     }
@@ -327,6 +339,40 @@ async function updateMemoryRequest(
   return result?.memory ?? null;
 }
 
+async function extractMemoriesRequest(
+  token: string,
+): Promise<{ factsExtracted: number; memoriesUpdated: number } | null> {
+  const response = await safeFetch(
+    "/api/mem/extract",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    },
+    "app",
+    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Failed to extract memories: ${message}`);
+    return null;
+  }
+
+  const result = await parseJSON<{
+    factsExtracted?: number;
+    memoriesUpdated?: number;
+  }>(response);
+
+  return {
+    factsExtracted: result?.factsExtracted ?? 0,
+    memoriesUpdated: result?.memoriesUpdated ?? 0,
+  };
+}
+
 async function memoryMenuPrompt(
   memories: MemoryRecord[],
 ): Promise<MemoryMenuResult> {
@@ -376,6 +422,10 @@ async function memoryMenuPrompt(
 
   if (menu.action === "delete") {
     return { type: "delete", memory: selected };
+  }
+
+  if (menu.action === "extract") {
+    return { type: "extract" };
   }
 
   // For "open" action, just show the memory details

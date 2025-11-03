@@ -5,6 +5,7 @@ import { MEMORY_CATEGORIES } from "../types.js";
 import { getMemoriesByUser, deleteMemory, insertMemory, updateMemory } from "../memory.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { formatZodError } from "../validation.js";
+import { extractMemoriesForUser } from "../extraction.js";
 
 const memoryRoute = new Hono<{ Variables: AppVariables }>();
 
@@ -47,6 +48,37 @@ memoryRoute.get("/", async (c) => {
   } catch (error) {
     console.error("Failed to list memories", error);
     return c.json({ error: "Failed to list memories" }, 500);
+  }
+});
+
+/**
+ * POST /api/mem/extract
+ * Extract memories from unextracted messages for the authenticated user
+ */
+memoryRoute.post("/extract", async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+
+  const payload = await c.req.json().catch(() => undefined);
+  const parsed = z.strictObject({
+    provider: providerEnum.optional(),
+  }).safeParse(payload);
+
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  const { provider } = parsed.data;
+  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+
+  try {
+    const result = await extractMemoriesForUser(user.id, resolvedProvider);
+    return c.json({
+      factsExtracted: result.factsExtracted,
+      memoriesUpdated: result.memoriesUpdated,
+    });
+  } catch (error) {
+    console.error("Failed to extract memories", error);
+    return c.json({ error: "Failed to extract memories" }, 500);
   }
 });
 
