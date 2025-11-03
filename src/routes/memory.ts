@@ -1,12 +1,44 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { AppVariables } from "../types.js";
-import { getMemoriesByUser, deleteMemory } from "../memory.js";
+import { getMemoriesByUser, deleteMemory, insertMemory, updateMemory } from "../memory.js";
 import { requireAuth } from "../middlewares/auth.js";
+import { formatZodError } from "../validation.js";
 
 const memoryRoute = new Hono<{ Variables: AppVariables }>();
 
 // Apply authentication middleware to all memory routes
 memoryRoute.use("/*", requireAuth);
+
+const providerEnum = z.enum(["openai", "ollama"]);
+type Provider = z.infer<typeof providerEnum>;
+
+const DEFAULT_PROVIDER: Provider = "openai";
+
+const memoryCategoryEnum = z.enum([
+  "USER_INFO",
+  "USER_PREFERENCE",
+  "USER_GOAL",
+  "USER_RELATIONSHIP",
+  "EVENT",
+  "OTHER",
+]);
+
+const createMemorySchema = z.strictObject({
+  content: z.string().trim().min(1, "Memory content is required"),
+  category: memoryCategoryEnum.optional(),
+  importance: z.number().min(0).max(1).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  provider: providerEnum.optional(),
+});
+
+const updateMemorySchema = z.strictObject({
+  content: z.string().trim().min(1, "Memory content cannot be empty").optional(),
+  category: memoryCategoryEnum.optional(),
+  importance: z.number().min(0).max(1).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  provider: providerEnum.optional(),
+});
 
 /**
  * GET /api/mem
@@ -21,6 +53,107 @@ memoryRoute.get("/", async (c) => {
   } catch (error) {
     console.error("Failed to list memories", error);
     return c.json({ error: "Failed to list memories" }, 500);
+  }
+});
+
+/**
+ * POST /api/mem
+ * Create a new memory for the authenticated user
+ */
+memoryRoute.post("/", async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+
+  const payload = await c.req.json().catch(() => undefined);
+  const parsed = createMemorySchema.safeParse(payload);
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  const { content, category, importance, confidence, provider } = parsed.data;
+  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+
+  try {
+    const memory = await insertMemory(resolvedProvider, {
+      userId: user.id,
+      content,
+      category: category ?? null,
+      importance: importance ?? null,
+      confidence: confidence ?? null,
+    });
+
+    if (!memory) {
+      return c.json({ error: "Failed to create memory" }, 500);
+    }
+
+    return c.json({ memory }, 201);
+  } catch (error) {
+    console.error("Failed to create memory", error);
+    return c.json({ error: "Failed to create memory" }, 500);
+  }
+});
+
+/**
+ * PUT /api/mem/:id
+ * Update a specific memory by ID
+ */
+memoryRoute.put("/:id", async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+  const idParam = c.req.param("id");
+
+  const memoryId = parseInt(idParam, 10);
+  if (isNaN(memoryId)) {
+    return c.json({ error: "Invalid memory ID" }, 400);
+  }
+
+  const payload = await c.req.json().catch(() => undefined);
+  const parsed = updateMemorySchema.safeParse(payload);
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  const { content, category, importance, confidence, provider } = parsed.data;
+  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+
+  try {
+    // First check if the memory exists and belongs to the user
+    const memories = await getMemoriesByUser(user.id);
+    const existingMemory = memories.find((m) => m.id === memoryId);
+
+    if (!existingMemory) {
+      return c.json({ error: "Memory not found" }, 404);
+    }
+
+    if (existingMemory.userId !== user.id) {
+      return c.json({ error: "Unauthorized" }, 403);
+    }
+
+    // Build update object
+    const updates: any = {};
+    if (category !== undefined) updates.category = category;
+    if (importance !== undefined) updates.importance = importance;
+    if (confidence !== undefined) updates.confidence = confidence;
+
+    // If content is being updated, regenerate the embedding
+    if (content !== undefined) {
+      updates.content = content;
+      updates.prevContent = existingMemory.content;
+
+      // Import embedText to generate new embedding
+      const { embedText } = await import("../llm.js");
+      const embedding = await embedText(resolvedProvider, content);
+      updates.embedding = embedding;
+    }
+
+    const updated = await updateMemory(memoryId, updates);
+
+    if (!updated) {
+      return c.json({ error: "Failed to update memory" }, 500);
+    }
+
+    return c.json({ memory: updated });
+  } catch (error) {
+    console.error("Failed to update memory", error);
+    return c.json({ error: "Failed to update memory" }, 500);
   }
 });
 

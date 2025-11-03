@@ -46,7 +46,7 @@ const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "/memory",
-    description: "Browse and delete your memories",
+    description: "Browse, create, edit, and delete your memories",
     isVisible: isLoggedIn,
     handler: async ({ session }) => {
       await executeWithSession(session, browseMemories);
