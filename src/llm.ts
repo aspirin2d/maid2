@@ -158,3 +158,52 @@ export async function* streamOllamaStructured(args: {
     }
   }
 }
+
+// ================
+// Direct Response
+// ================
+
+export async function parseOpenAIStructured(args: {
+  prompt: string;
+  format: StructuredFormat;
+}): Promise<string> {
+  const { prompt, format } = args;
+  const client = getOpenAI();
+  const response = await client.responses.parse({
+    model: OPENAI_MODEL,
+    input: prompt,
+    text: { format: { ...format, strict: true, type: "json_schema" } },
+  });
+
+  if (response.refusal) {
+    throw new Error(`OpenAI refused: ${response.refusal}`);
+  }
+
+  return response.output_text || "";
+}
+
+export async function parseOllamaStructured(args: {
+  prompt: string;
+  format: StructuredFormat;
+}): Promise<string> {
+  const { prompt, format } = args;
+  const client = getOllama();
+  const response = await client.chat({
+    model: OLLAMA_MODEL,
+    messages: [{ role: "user", content: prompt }],
+    stream: false,
+    options: {
+      temperature: 0.7,
+      top_p: 0.8,
+      top_k: 20,
+    },
+    format: format.schema,
+    keep_alive: OLLAMA_KEEP_ALIVE,
+  });
+
+  if (!response.message?.content) {
+    throw new Error("Ollama returned empty response");
+  }
+
+  return response.message.content;
+}

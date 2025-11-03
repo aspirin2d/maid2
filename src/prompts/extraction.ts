@@ -54,8 +54,8 @@ export const MemoryUpdateSchema = z.object({
 
 export function getFactRetrievalMessages(
   parsedMessages: string,
-): [string, string] {
-  const systemPrompt = `Extract important facts about the user from conversation history.
+): string {
+  return `Extract important facts about the user from conversation history.
 
 EXTRACT (with category):
 • PERSONAL_INFO: name, age, identity, location | importance 0.9-1.0
@@ -90,11 +90,11 @@ RULES:
 1. Extract from user messages only
 2. Use latest information if corrected
 3. Never fabricate facts
-4. Be precise with importance and confidence scores`;
+4. Be precise with importance and confidence scores
 
-  const userPrompt = `Extract facts from this conversation:\n\n${parsedMessages}`;
+Extract facts from this conversation:
 
-  return [systemPrompt, userPrompt];
+${parsedMessages}`;
 }
 
 export function getUpdateMemoryMessages(

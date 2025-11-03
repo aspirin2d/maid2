@@ -5,8 +5,8 @@ import { getMessagesByUser } from "./message.js";
 import {
   embedTexts,
   type Provider,
-  streamOpenAIStructured,
-  streamOllamaStructured,
+  parseOpenAIStructured,
+  parseOllamaStructured,
 } from "./llm.js";
 import {
   bulkSearchSimilarMemories,
@@ -51,26 +51,18 @@ export async function extractMemoriesForUser(
   const parsedMessages = parseMessages(messageContents);
 
   // Step 2: Extract facts from conversation with LLM
-  const [systemPrompt, userPrompt] = getFactRetrievalMessages(parsedMessages);
-  const factExtractionPrompt = `${systemPrompt}\n\n${userPrompt}`;
+  const factExtractionPrompt = getFactRetrievalMessages(parsedMessages);
 
-  let factExtractionResult = "";
-  const streamFn =
-    provider === "openai" ? streamOpenAIStructured : streamOllamaStructured;
+  const parseFn =
+    provider === "openai" ? parseOpenAIStructured : parseOllamaStructured;
 
-  for await (const event of streamFn({
+  const factExtractionResult = await parseFn({
     prompt: factExtractionPrompt,
     format: {
       name: "fact_retrieval",
       schema: z.toJSONSchema(FactRetrievalSchema),
     },
-  })) {
-    if (event.type === "delta") {
-      factExtractionResult += event.data;
-    } else if (event.type === "error") {
-      throw new Error(`Fact extraction failed: ${event.data}`);
-    }
-  }
+  });
 
   // Parse extracted facts
   const parsedFacts = FactRetrievalSchema.parse(
@@ -135,20 +127,13 @@ export async function extractMemoriesForUser(
     unifiedNewFacts,
   );
 
-  let memoryUpdateResult = "";
-  for await (const event of streamFn({
+  const memoryUpdateResult = await parseFn({
     prompt: memoryUpdatePrompt,
     format: {
       name: "memory_update",
       schema: z.toJSONSchema(MemoryUpdateSchema),
     },
-  })) {
-    if (event.type === "delta") {
-      memoryUpdateResult += event.data;
-    } else if (event.type === "error") {
-      throw new Error(`Memory update decision failed: ${event.data}`);
-    }
-  }
+  });
 
   // Parse memory update decisions
   const parsedDecisions = MemoryUpdateSchema.parse(
