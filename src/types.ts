@@ -23,19 +23,7 @@ export type JsonValue =
 export type Metadata = Record<string, JsonValue>;
 
 /**
- * Memory category enum values
- * Centralized definition used across schema, prompts, and routes
+ * Memory category types re-exported from shared-types.ts
+ * This maintains backward compatibility for src files
  */
-export const MEMORY_CATEGORIES = [
-  "USER_INFO",
-  "USER_PREFERENCE",
-  "USER_GOAL",
-  "USER_RELATIONSHIP",
-  "EVENT",
-  "OTHER",
-] as const;
-
-/**
- * Memory category type derived from the const array
- */
-export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+export { MEMORY_CATEGORIES, type MemoryCategory } from "../shared-types.js";
