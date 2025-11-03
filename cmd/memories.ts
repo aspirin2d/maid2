@@ -13,8 +13,8 @@ import {
   APP_BASE_URL,
   AUTH_BASE_URL,
 } from "./core.js";
-import type { MemoryCategory } from "../src/types.js";
-import { MEMORY_CATEGORIES } from "../src/types.js";
+import type { MemoryCategory } from "../shared-types.js";
+import { MEMORY_CATEGORIES } from "../shared-types.js";
 
 // Helper function to format category names for display
 function formatCategoryName(category: MemoryCategory): string {
