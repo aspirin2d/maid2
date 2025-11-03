@@ -52,20 +52,15 @@ export const MemoryUpdateSchema = z.object({
     ),
 });
 
-export function getFactRetrievalMessages(
-  parsedMessages: string,
-): string {
+export function getFactRetrievalMessages(parsedMessages: string): string {
   return `Extract important facts about the user from conversation history.
 
 EXTRACT (with category):
-• PERSONAL_INFO: name, age, identity, location | importance 0.9-1.0
-• PREFERENCE: likes, dislikes, favorites | importance 0.5-0.8
-• GOAL: plans, aspirations, objectives | importance 0.7-0.9
-• ROUTINE: habits, schedules, regular activities | importance 0.5-0.7
-• RELATIONSHIP: friends, family, connections | importance 0.5-0.7
-• HEALTH: medical info, fitness, wellness | importance 0.7-0.9
+• USER_INFO: name, age, identity, location | importance 0.9-1.0
+• USER_PREFERENCE: likes, dislikes, favorites | importance 0.5-0.8
+• USER_GOAL: plans, aspirations, objectives | importance 0.7-0.9
+• USER_RELATIONSHIP: friends, family, connections | importance 0.5-0.7
 • EVENT: important occurrences, milestones | importance 0.3-0.7
-• WORK: career, job, professional info | importance 0.6-0.9
 • OTHER: anything else relevant | importance 0.3-0.6
 
 IGNORE:
