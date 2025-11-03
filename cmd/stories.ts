@@ -185,6 +185,29 @@ async function deleteStoryRequest(token: string, storyId: number) {
   return true;
 }
 
+async function clearStoryMessagesRequest(token: string, storyId: number) {
+  const response = await safeFetch(
+    `/api/s/${storyId}/messages`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`❌ Failed to clear messages: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ deletedCount?: number }>(response);
+  return data?.deletedCount ?? 0;
+}
+
 async function updateStoryRequest(
   token: string,
   storyId: number,
@@ -303,7 +326,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
 
   printStoryDetails(storyDetails);
   console.log(
-    "\n💬 Entering chat mode. Commands: /handler to switch handlers, /provider to switch providers, /exit to go back.",
+    "\n💬 Entering chat mode. Commands: /handler to switch handlers, /provider to switch providers, /clear to clear all messages, /exit to go back.",
   );
 
   let handler = storyDetails.handler;
@@ -344,6 +367,31 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
     if (command === "/exit" || command === "/back" || command === "/quit") {
       console.log("👋 Leaving chat.");
       return;
+    }
+
+    if (command === "/clear") {
+      try {
+        const confirmed = await confirm({
+          message: "Are you sure you want to clear all messages from this story?",
+          default: false,
+        });
+
+        if (confirmed) {
+          const deletedCount = await clearStoryMessagesRequest(token, storyRecord.id);
+          if (deletedCount !== null) {
+            console.log(`🗑️  Cleared ${deletedCount} message(s) from this story.`);
+          }
+        } else {
+          console.log("❌ Clear cancelled.");
+        }
+      } catch (error) {
+        if (isPromptAbortError(error)) {
+          console.log("❌ Clear cancelled.");
+        } else {
+          throw error;
+        }
+      }
+      continue;
     }
 
     if (command === "/handler") {

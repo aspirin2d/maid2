@@ -126,3 +126,13 @@ export async function bulkInsertMessages(
     await db.insert(message).values(validMessages);
   }
 }
+
+/**
+ * Delete all messages for a story
+ * @param storyId - The story ID to delete messages for
+ * @returns The number of messages deleted
+ */
+export async function deleteMessagesByStory(storyId: number) {
+  const result = await db.delete(message).where(eq(message.storyId, storyId));
+  return result.rowCount ?? 0;
+}

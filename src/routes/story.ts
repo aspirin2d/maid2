@@ -14,6 +14,7 @@ import {
   updateStory,
   deleteStory,
 } from "../story.js";
+import { deleteMessagesByStory } from "../message.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { validateStoryId } from "../middlewares/params.js";
 import { isValidHandler } from "../middlewares/handler.js";
@@ -243,6 +244,24 @@ storiesRoute.delete("/:id", validateStoryId, async (c) => {
   } catch (error) {
     console.error("Failed to delete story", error);
     return c.json({ error: "Failed to delete story" }, 500);
+  }
+});
+
+storiesRoute.delete("/:id/messages", validateStoryId, async (c) => {
+  const user = c.get("user")!; // Safe: requireAuth middleware ensures user exists
+  const id = c.get("storyId"); // Safe: validateStoryId middleware ensures valid ID
+
+  try {
+    const exists = await storyExists(user.id, id);
+    if (!exists) {
+      return c.json({ error: "Story not found" }, 404);
+    }
+
+    const deletedCount = await deleteMessagesByStory(id);
+    return c.json({ deletedCount });
+  } catch (error) {
+    console.error("Failed to clear messages", error);
+    return c.json({ error: "Failed to clear messages" }, 500);
   }
 });
 
