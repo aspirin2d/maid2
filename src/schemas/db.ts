@@ -9,6 +9,7 @@ import {
   timestamp,
   vector,
 } from "drizzle-orm/pg-core";
+import { MEMORY_CATEGORIES } from "../types.js";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -132,14 +133,7 @@ export const memory = pgTable(
 
     // Memory metadata fields
     category: text("category", {
-      enum: [
-        "USER_INFO",
-        "USER_PREFERENCE",
-        "USER_GOAL",
-        "USER_RELATIONSHIP",
-        "EVENT",
-        "OTHER",
-      ],
+      enum: MEMORY_CATEGORIES as unknown as [string, ...string[]],
     }),
     importance: real("importance"), // 0-1 scale
     confidence: real("confidence"), // 0-1 scale
