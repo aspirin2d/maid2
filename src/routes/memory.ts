@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AppVariables } from "../types.js";
+import { MEMORY_CATEGORIES, type AppVariables } from "../types.js";
 import {
   getMemoriesByUser,
   getMemoryById,
@@ -21,15 +21,6 @@ const providerEnum = z.enum(["openai", "ollama"]);
 type Provider = z.infer<typeof providerEnum>;
 
 const DEFAULT_PROVIDER: Provider = "openai";
-
-const MEMORY_CATEGORIES = [
-  "USER_INFO",
-  "USER_PREFERENCE",
-  "USER_GOAL",
-  "USER_RELATIONSHIP",
-  "EVENT",
-  "OTHER",
-] as const;
 
 const memoryCategoryEnum = z.enum(MEMORY_CATEGORIES);
 

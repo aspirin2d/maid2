@@ -1,3 +1,4 @@
+import z from "zod";
 import { auth } from "./auth.js";
 
 export type AppVariables = {
@@ -21,3 +22,14 @@ export type JsonValue =
  * Metadata type for database entities
  */
 export type Metadata = Record<string, JsonValue>;
+
+export const MEMORY_CATEGORIES = [
+  "USER_INFO",
+  "USER_PREFERENCE",
+  "USER_GOAL",
+  "USER_RELATIONSHIP",
+  "EVENT",
+  "OTHER",
+] as const;
+
+export const memoryCategoryEnum = z.enum(MEMORY_CATEGORIES);
