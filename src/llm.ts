@@ -175,11 +175,13 @@ export async function parseOpenAIStructured(args: {
     text: { format: { ...format, strict: true, type: "json_schema" } },
   });
 
-  if (response.refusal) {
-    throw new Error(`OpenAI refused: ${response.refusal}`);
+  // Note: refusal property removed as it's not in OpenAI SDK response type
+  // If response.output_text is empty, it might indicate a refusal
+  if (!response.output_text) {
+    throw new Error("OpenAI returned empty response");
   }
 
-  return response.output_text || "";
+  return response.output_text;
 }
 
 export async function parseOllamaStructured(args: {

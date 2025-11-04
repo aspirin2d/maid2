@@ -10,6 +10,7 @@ import {
   buildMemoryContext,
   buildChatHistory,
 } from "./context/index.js";
+import { getEventContext, type LiveEvent } from "./events.js";
 
 /**
  * Cached system prompt to avoid repeated string concatenation
@@ -40,11 +41,11 @@ function getDefaultSystemPrompt(): string {
  * 1. Getting the system prompt (character settings, stream info, format)
  * 2. Adding current time context
  * 3. Fetching relevant memories and chat history in parallel
- * 4. Adding the current user request
+ * 4. Adding the current event/request context
  * 5. Adding final instructions for JSON formatting
  */
 export async function buildPrompt(
-  input: any,
+  event: LiveEvent,
   ctx: StoryContext,
   config?: HandlerConfig,
 ): Promise<string> {
@@ -57,12 +58,13 @@ export async function buildPrompt(
   // Add current time context
   prompt.push(buildTimeContext());
 
-  // Extract user request for memory search
-  const request = extractRequestText(input);
+  // Extract event context and text for memory search
+  const eventContext = getEventContext(event);
+  const searchText = extractEventTextForMemory(event);
 
   // Parallelize independent async operations for better performance
   const [memoryContext, chatHistory] = await Promise.all([
-    buildMemoryContext(request, ctx, config),
+    buildMemoryContext(searchText, ctx, config),
     buildChatHistory(ctx, messageLimit),
   ]);
 
@@ -75,10 +77,11 @@ export async function buildPrompt(
   prompt.push(chatHistory);
   prompt.push("");
 
-  // Add current request
-  if (request) {
-    prompt.push("## 当前请求");
-    prompt.push(request);
+  // Add current event/request with appropriate section header
+  if (eventContext) {
+    const sectionHeader = getEventSectionHeader(event);
+    prompt.push(`## ${sectionHeader}`);
+    prompt.push(eventContext);
     prompt.push("");
   }
 
@@ -89,4 +92,46 @@ export async function buildPrompt(
   );
 
   return prompt.join("\n");
+}
+
+/**
+ * Extract text from event for memory search
+ * Only certain event types are relevant for memory lookup
+ */
+function extractEventTextForMemory(event: LiveEvent): string | null {
+  switch (event.type) {
+    case "user_chat":
+      return event.data.message;
+    case "bullet_chat":
+      return event.data.message;
+    case "simple_text":
+      return event.data.text;
+    default:
+      // Other event types don't need memory search
+      return null;
+  }
+}
+
+/**
+ * Get appropriate section header for different event types
+ */
+function getEventSectionHeader(event: LiveEvent): string {
+  switch (event.type) {
+    case "user_chat":
+    case "bullet_chat":
+    case "simple_text":
+      return "当前请求";
+    case "program_event":
+      return "节目状态变化";
+    case "gift_event":
+      return "收到礼物";
+    case "user_interaction":
+      return "用户互动";
+    case "system_event":
+      return "系统事件";
+    case "emotion_event":
+      return "情绪事件";
+    default:
+      return "当前事件";
+  }
 }
