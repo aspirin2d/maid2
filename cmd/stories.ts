@@ -1,4 +1,4 @@
-import { confirm, input, select } from "@inquirer/prompts";
+import { confirm, input, select, number } from "@inquirer/prompts";
 
 import {
   extractErrorMessage,
@@ -35,6 +35,305 @@ type StreamArgs = {
   provider: ProviderOption;
   input: unknown;
 };
+
+// ============================================================================
+// Live Handler Event Input Builder
+// ============================================================================
+
+/**
+ * Build event-based input for the live handler
+ * Provides an interactive menu to create various event types
+ */
+async function buildLiveEventInput(): Promise<unknown> {
+  const eventType = await select({
+    message: "Choose event type",
+    choices: [
+      { name: "💬 Simple text (just type a message)", value: "simple_text" },
+      { name: "👤 User chat (regular conversation)", value: "user_chat" },
+      { name: "🎯 Bullet chat (danmaku/弹幕)", value: "bullet_chat" },
+      { name: "📺 Program event (start/finish segment)", value: "program_event" },
+      { name: "🎁 Gift event (donations/gifts)", value: "gift_event" },
+      { name: "❤️ User interaction (follow/subscribe)", value: "user_interaction" },
+      { name: "⚙️ System event (technical notification)", value: "system_event" },
+      { name: "😊 Emotion event (mood change)", value: "emotion_event" },
+    ],
+    default: "simple_text",
+  });
+
+  // Simple text - just return the text directly (backward compatible)
+  if (eventType === "simple_text") {
+    const text = await input({
+      message: "Enter your message",
+      validate: requiredField("Message"),
+    });
+    return text;
+  }
+
+  // Build event-specific data
+  switch (eventType) {
+    case "user_chat": {
+      const message = await input({
+        message: "Chat message",
+        validate: requiredField("Message"),
+      });
+      const username = await input({
+        message: "Username (optional, press Enter to skip)",
+      });
+      return {
+        type: "user_chat",
+        data: {
+          message,
+          ...(username.trim() && { username: username.trim() }),
+          timestamp: Date.now(),
+        },
+      };
+    }
+
+    case "bullet_chat": {
+      const message = await input({
+        message: "Bullet chat message",
+        validate: requiredField("Message"),
+      });
+      const username = await input({
+        message: "Username (optional, press Enter to skip)",
+      });
+      const position = await select({
+        message: "Display position",
+        choices: [
+          { name: "Scroll", value: "scroll" },
+          { name: "Top", value: "top" },
+          { name: "Bottom", value: "bottom" },
+        ],
+        default: "scroll",
+      });
+      return {
+        type: "bullet_chat",
+        data: {
+          message,
+          ...(username.trim() && { username: username.trim() }),
+          position,
+          timestamp: Date.now(),
+        },
+      };
+    }
+
+    case "program_event": {
+      const action = await select({
+        message: "Program action",
+        choices: [
+          { name: "Start", value: "start" },
+          { name: "Finish", value: "finish" },
+          { name: "Pause", value: "pause" },
+          { name: "Resume", value: "resume" },
+        ],
+      });
+      const programName = await input({
+        message: "Program name",
+        validate: requiredField("Program name"),
+      });
+      const programType = await select({
+        message: "Program type (optional)",
+        choices: [
+          { name: "Skip", value: "" },
+          { name: "Singing (唱歌)", value: "singing" },
+          { name: "Chatting (聊天)", value: "chatting" },
+          { name: "Gaming (游戏)", value: "gaming" },
+          { name: "Drawing (绘画)", value: "drawing" },
+          { name: "Other (其他)", value: "other" },
+        ],
+      });
+      const data: any = {
+        action,
+        programName,
+        ...(programType && { programType }),
+      };
+
+      if (action === "finish") {
+        const durationInput = await input({
+          message: "Duration in seconds (optional, press Enter to skip)",
+        });
+        if (durationInput.trim()) {
+          const duration = parseInt(durationInput, 10);
+          if (!isNaN(duration)) {
+            data.duration = duration;
+          }
+        }
+      }
+
+      return {
+        type: "program_event",
+        data,
+      };
+    }
+
+    case "gift_event": {
+      const username = await input({
+        message: "Sender username",
+        validate: requiredField("Username"),
+      });
+      const giftName = await input({
+        message: "Gift name",
+        validate: requiredField("Gift name"),
+      });
+      const giftCountInput = await input({
+        message: "Gift count",
+        default: "1",
+        validate: (value) => {
+          const num = parseInt(value, 10);
+          if (isNaN(num) || num < 1) {
+            return "Please enter a valid number (minimum 1)";
+          }
+          return true;
+        },
+      });
+      const giftMessage = await input({
+        message: "Message with gift (optional, press Enter to skip)",
+      });
+      const giftValueInput = await input({
+        message: "Gift value (optional, press Enter to skip)",
+      });
+
+      const data: any = {
+        username,
+        giftName,
+        giftCount: parseInt(giftCountInput, 10),
+        ...(giftMessage.trim() && { message: giftMessage.trim() }),
+      };
+
+      if (giftValueInput.trim()) {
+        const value = parseFloat(giftValueInput);
+        if (!isNaN(value)) {
+          data.giftValue = value;
+        }
+      }
+
+      return {
+        type: "gift_event",
+        data,
+      };
+    }
+
+    case "user_interaction": {
+      const action = await select({
+        message: "Interaction type",
+        choices: [
+          { name: "Follow (关注)", value: "follow" },
+          { name: "Subscribe (订阅)", value: "subscribe" },
+          { name: "Like (点赞)", value: "like" },
+          { name: "Share (分享)", value: "share" },
+        ],
+      });
+      const username = await input({
+        message: "Username",
+        validate: requiredField("Username"),
+      });
+      const data: any = {
+        action,
+        username,
+      };
+
+      if (action === "subscribe") {
+        const tier = await input({
+          message: "Subscription tier (optional, press Enter to skip)",
+        });
+        const monthsInput = await input({
+          message: "Subscription months (optional, press Enter to skip)",
+        });
+
+        if (tier.trim()) {
+          data.tier = tier.trim();
+        }
+        if (monthsInput.trim()) {
+          const months = parseInt(monthsInput, 10);
+          if (!isNaN(months)) {
+            data.months = months;
+          }
+        }
+      }
+
+      return {
+        type: "user_interaction",
+        data,
+      };
+    }
+
+    case "system_event": {
+      const eventTypeStr = await input({
+        message: "Event type (e.g., stream_start, technical_issue)",
+        validate: requiredField("Event type"),
+      });
+      const message = await input({
+        message: "System message (optional, press Enter to skip)",
+      });
+      const severity = await select({
+        message: "Severity",
+        choices: [
+          { name: "Info", value: "info" },
+          { name: "Warning", value: "warning" },
+          { name: "Error", value: "error" },
+        ],
+        default: "info",
+      });
+      return {
+        type: "system_event",
+        data: {
+          eventType: eventTypeStr,
+          ...(message.trim() && { message: message.trim() }),
+          severity,
+        },
+      };
+    }
+
+    case "emotion_event": {
+      const emotion = await input({
+        message: "Emotion (e.g., happy, excited, tired, surprised)",
+        validate: requiredField("Emotion"),
+      });
+      const intensityInput = await input({
+        message: "Intensity 0-1 (optional, press Enter to skip)",
+      });
+      const trigger = await input({
+        message: "Trigger/reason (optional, press Enter to skip)",
+      });
+      const durationInput = await input({
+        message: "Duration in seconds (optional, press Enter to skip)",
+      });
+
+      const data: any = {
+        emotion,
+      };
+
+      if (intensityInput.trim()) {
+        const intensity = parseFloat(intensityInput);
+        if (!isNaN(intensity) && intensity >= 0 && intensity <= 1) {
+          data.intensity = intensity;
+        }
+      }
+      if (trigger.trim()) {
+        data.trigger = trigger.trim();
+      }
+      if (durationInput.trim()) {
+        const duration = parseInt(durationInput, 10);
+        if (!isNaN(duration)) {
+          data.duration = duration;
+        }
+      }
+
+      return {
+        type: "emotion_event",
+        data,
+      };
+    }
+
+    default:
+      // Fallback to simple text
+      const text = await input({
+        message: "Enter your message",
+        validate: requiredField("Message"),
+      });
+      return text;
+  }
+}
 
 // ============================================================================
 // Story Management
@@ -345,11 +644,17 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
   console.log(`⚙️  Using handler "${handler}" and provider "${provider}".`);
 
   while (true) {
-    let rawMessage: string;
+    // For live handler, use event builder; otherwise use simple text input
+    let userInput: unknown;
     try {
-      rawMessage = await input({
-        message: "You",
-      });
+      if (handler === "live") {
+        userInput = await buildLiveEventInput();
+      } else {
+        const rawMessage = await input({
+          message: "You",
+        });
+        userInput = rawMessage;
+      }
     } catch (error) {
       if (isPromptAbortError(error)) {
         console.log("\n👋 Leaving chat.");
@@ -358,68 +663,76 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
       throw error;
     }
 
-    const message = rawMessage;
-    if (!message) {
-      console.log("⚠️  Message cannot be empty.");
-      continue;
-    }
+    // Handle string commands
+    if (typeof userInput === "string") {
+      if (!userInput) {
+        console.log("⚠️  Message cannot be empty.");
+        continue;
+      }
 
-    const command = message.toLowerCase();
-    if (command === "/exit" || command === "/back" || command === "/quit") {
-      console.log("👋 Leaving chat.");
-      return;
-    }
+      const command = userInput.toLowerCase();
+      if (command === "/exit" || command === "/back" || command === "/quit") {
+        console.log("👋 Leaving chat.");
+        return;
+      }
 
-    if (command === "/clear") {
-      try {
-        const confirmed = await confirm({
-          message: "Are you sure you want to clear all messages from this story?",
-          default: false,
-        });
+      if (command === "/clear") {
+        try {
+          const confirmed = await confirm({
+            message: "Are you sure you want to clear all messages from this story?",
+            default: false,
+          });
 
-        if (confirmed) {
-          const deletedCount = await clearStoryMessagesRequest(token, storyRecord.id);
-          if (deletedCount !== null) {
-            console.log(`🗑️  Cleared ${deletedCount} message(s) from this story.`);
+          if (confirmed) {
+            const deletedCount = await clearStoryMessagesRequest(token, storyRecord.id);
+            if (deletedCount !== null) {
+              console.log(`🗑️  Cleared ${deletedCount} message(s) from this story.`);
+            }
+          } else {
+            console.log("❌ Clear cancelled.");
           }
-        } else {
-          console.log("❌ Clear cancelled.");
+        } catch (error) {
+          if (isPromptAbortError(error)) {
+            console.log("❌ Clear cancelled.");
+          } else {
+            throw error;
+          }
         }
-      } catch (error) {
-        if (isPromptAbortError(error)) {
-          console.log("❌ Clear cancelled.");
-        } else {
-          throw error;
+        continue;
+      }
+
+      if (command === "/handler") {
+        const next = await selectStoryHandler(token, storyRecord.id, handler);
+        if (next) {
+          handler = next;
+          console.log(`🔁 Using handler "${handler}".`);
         }
+        continue;
       }
-      continue;
+
+      if (command === "/provider") {
+        const nextProvider = await selectProvider(provider);
+        if (nextProvider) {
+          provider = nextProvider;
+          console.log(`🔁 Using provider "${provider}".`);
+        }
+        continue;
+      }
     }
 
-    if (command === "/handler") {
-      const next = await selectStoryHandler(token, storyRecord.id, handler);
-      if (next) {
-        handler = next;
-        console.log(`🔁 Using handler "${handler}".`);
-      }
-      continue;
-    }
+    // Display user input
+    const displayMessage = typeof userInput === "string"
+      ? userInput
+      : JSON.stringify(userInput, null, 2);
+    console.log(`\n🧑 You: ${displayMessage}`);
 
-    if (command === "/provider") {
-      const nextProvider = await selectProvider(provider);
-      if (nextProvider) {
-        provider = nextProvider;
-        console.log(`🔁 Using provider "${provider}".`);
-      }
-      continue;
-    }
-
-    console.log(`\n🧑 You: ${message}`);
+    // Stream the conversation
     await streamStoryConversation({
       token,
       storyId: storyRecord.id,
       handler,
       provider,
-      input: message,
+      input: userInput,
     });
   }
 }
@@ -684,6 +997,7 @@ function displayParsedResponse(handler: string, payload: string) {
     parsed = null;
   }
 
+  // Handle simple handler output
   if (handler === "simple" && parsed && typeof parsed === "object") {
     const message = (parsed as { response?: unknown }).response;
     if (typeof message === "string" && message.trim().length > 0) {
@@ -692,6 +1006,30 @@ function displayParsedResponse(handler: string, payload: string) {
     return;
   }
 
+  // Handle live handler output (clips with body, face, speech)
+  if (handler === "live" && parsed && typeof parsed === "object") {
+    const data = parsed as { clips?: Array<{ body?: string; face?: string; speech?: string }> };
+    if (Array.isArray(data.clips) && data.clips.length > 0) {
+      console.log("\n🎬 VTuber Response:");
+      data.clips.forEach((clip, index) => {
+        if (data.clips!.length > 1) {
+          console.log(`\n  Clip ${index + 1}/${data.clips!.length}:`);
+        }
+        if (clip.body) {
+          console.log(`    💃 Body: ${clip.body}`);
+        }
+        if (clip.face) {
+          console.log(`    😊 Face: ${clip.face}`);
+        }
+        if (clip.speech) {
+          console.log(`    💬 Speech: ${clip.speech}`);
+        }
+      });
+      return;
+    }
+  }
+
+  // Fallback to raw JSON for other handlers or unparseable output
   displayRawResponse(parsed ? JSON.stringify(parsed, null, 2) : raw);
 }
 
