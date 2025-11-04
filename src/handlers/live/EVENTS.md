@@ -45,7 +45,6 @@ Regular user messages in a conversational context.
   data: {
     message: "今天天气真好！",
     username: "user123",        // optional
-    userId: "abc123",           // optional
     timestamp: 1635724800000    // optional
   }
 }
@@ -63,7 +62,6 @@ Short, casual messages typical in live streaming (danmaku/弹幕).
   data: {
     message: "哈哈哈",
     username: "viewer456",      // optional
-    userId: "def456",           // optional
     timestamp: 1635724800000,   // optional
     position: "scroll"          // optional: "top" | "bottom" | "scroll"
   }
@@ -126,7 +124,6 @@ When viewers send gifts or donations during the stream.
   type: "gift_event",
   data: {
     username: "generous_fan",
-    userId: "ghi789",              // optional
     giftName: "超级火箭",
     giftCount: 3,
     giftValue: 299.99,             // optional: monetary value
@@ -153,7 +150,6 @@ Non-chat user actions like following, subscribing, or sharing.
   data: {
     action: "subscribe",           // "follow" | "subscribe" | "like" | "share"
     username: "new_subscriber",
-    userId: "jkl012",              // optional
     tier: "premium",               // optional: for subscriptions
     months: 6                      // optional: subscription duration
   }

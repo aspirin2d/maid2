@@ -15,7 +15,6 @@ const userChatEventSchema = z.object({
   data: z.object({
     message: z.string().describe("The user's message content"),
     username: z.string().describe("Username of the sender").optional(),
-    userId: z.string().describe("User ID of the sender").optional(),
     timestamp: z.number().describe("Timestamp of the message").optional(),
   }),
 });
@@ -29,7 +28,6 @@ const bulletChatEventSchema = z.object({
   data: z.object({
     message: z.string().describe("The bullet chat message content"),
     username: z.string().describe("Username of the sender").optional(),
-    userId: z.string().describe("User ID of the sender").optional(),
     timestamp: z.number().describe("Timestamp of the message").optional(),
     position: z
       .enum(["top", "bottom", "scroll"])
@@ -65,7 +63,6 @@ const giftEventSchema = z.object({
   type: z.literal("gift_event"),
   data: z.object({
     username: z.string().describe("Username of the sender"),
-    userId: z.string().describe("User ID of the sender").optional(),
     giftName: z.string().describe("Name of the gift"),
     giftCount: z.number().default(1).describe("Number of gifts sent"),
     giftValue: z.number().describe("Value or cost of the gift").optional(),
@@ -83,7 +80,6 @@ const userInteractionEventSchema = z.object({
       .enum(["follow", "subscribe", "like", "share"])
       .describe("Interaction type"),
     username: z.string().describe("Username of the user"),
-    userId: z.string().describe("User ID of the user").optional(),
     tier: z.string().describe("Subscription tier (for subscribe events)").optional(),
     months: z.number().describe("Number of months (for subscribe events)").optional(),
   }),
