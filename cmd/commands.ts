@@ -1,23 +1,58 @@
 import { handleAuth, handleLogout } from "./auth.js";
-import { browseStories } from "./stories.js";
-import { browseMemories } from "./memories.js";
 import {
+  browseStories,
+  chatStoryCommand,
+  clearStoryMessagesCommand,
+  createStoryCommand,
+  deleteStoryCommand,
+  listStoryHandlersCommand,
+  listStoriesCommand,
+  renameStoryCommand,
+} from "./stories.js";
+import {
+  browseMemories,
+  createMemoryCommand,
+  deleteMemoryCommand,
+  editMemoryCommand,
+  extractMemoriesCommand,
+  listMemoriesCommand,
+  viewMemoryCommand,
+} from "./memories.js";
+import {
+  APP_BASE_URL,
   executeWithSession,
   isLoggedIn,
-  APP_BASE_URL,
   type CommandContext,
   type CommandDefinition,
+  type CommandResult,
   type SessionRecord,
+  type SubcommandDefinition,
 } from "./core.js";
 import { showHelp } from "./lib.js";
+
+type ResolvedCommand = {
+  command: CommandDefinition;
+  subcommand?: SubcommandDefinition;
+  args: string[];
+};
+
+function withSession(
+  context: CommandContext,
+  missingSessionMessage: string,
+  action: (token: string) => Promise<CommandResult | void>,
+) {
+  return executeWithSession(context.session, action, {
+    missingSessionMessage,
+  });
+}
 
 const COMMANDS: CommandDefinition[] = [
   {
     name: "/help",
     description: "Show available commands",
-    isVisible: () => true,
-    handler: async ({ session }) => {
-      showHelp(session, visibleCommands(session), APP_BASE_URL);
+    handler: async (context) => {
+      const commands = visibleCommands(context.session);
+      showHelp(context.session, commands, APP_BASE_URL);
     },
   },
   {
@@ -40,47 +75,312 @@ const COMMANDS: CommandDefinition[] = [
     name: "/story",
     description: "Browse, edit, or delete stories",
     isVisible: isLoggedIn,
-    handler: async ({ session }) => {
-      await executeWithSession(session, browseStories);
+    handler: async (context) => {
+      await withSession(
+        context,
+        "No active session. Log in before managing stories.",
+        (token) => browseStories(token),
+      );
     },
+    subcommands: [
+      {
+        name: "list",
+        description: "List your stories with basic details",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before listing stories.",
+            (token) => listStoriesCommand(token),
+          );
+        },
+      },
+      {
+        name: "create",
+        description: "Create a new story interactively",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before creating stories.",
+            (token) => createStoryCommand(token),
+          );
+        },
+      },
+      {
+        name: "chat",
+        description: "Open a chat session with a story",
+        usage: "<storyId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before chatting with stories.",
+            (token) => chatStoryCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "rename",
+        description: "Rename a story",
+        usage: "<storyId> [new name]",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before renaming stories.",
+            (token) => renameStoryCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "delete",
+        description: "Delete a story",
+        usage: "<storyId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before deleting stories.",
+            (token) => deleteStoryCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "clear",
+        description: "Clear all messages for a story",
+        usage: "<storyId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before clearing story messages.",
+            (token) => clearStoryMessagesCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "handlers",
+        description: "List available story handlers",
+        usage: "[storyId]",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before listing handlers.",
+            (token) => listStoryHandlersCommand(token, context.args),
+          );
+        },
+      },
+    ],
   },
   {
     name: "/memory",
     description: "Browse, create, edit, and delete your memories",
     isVisible: isLoggedIn,
-    handler: async ({ session }) => {
-      await executeWithSession(session, browseMemories);
+    handler: async (context) => {
+      await withSession(
+        context,
+        "No active session. Log in before managing memories.",
+        (token) => browseMemories(token),
+      );
     },
+    subcommands: [
+      {
+        name: "list",
+        description: "List your stored memories",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before listing memories.",
+            (token) => listMemoriesCommand(token),
+          );
+        },
+      },
+      {
+        name: "view",
+        description: "View the details of a memory",
+        usage: "<memoryId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before viewing memories.",
+            (token) => viewMemoryCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "create",
+        description: "Create a new memory",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before creating memories.",
+            (token) => createMemoryCommand(token),
+          );
+        },
+      },
+      {
+        name: "edit",
+        description: "Edit an existing memory",
+        usage: "<memoryId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before editing memories.",
+            (token) => editMemoryCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "delete",
+        description: "Delete a memory",
+        usage: "<memoryId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before deleting memories.",
+            (token) => deleteMemoryCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "extract",
+        description: "Extract memories from recent messages",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before extracting memories.",
+            (token) => extractMemoriesCommand(token),
+          );
+        },
+      },
+    ],
   },
   {
     name: "/logout",
     description: "Sign out and clear the saved session",
     isVisible: isLoggedIn,
-    handler: async ({ session }) => {
-      await handleLogout(session);
+    handler: async (context) => {
+      await handleLogout(context.session);
     },
   },
   {
     name: "/exit",
     description: "Close this CLI",
-    isVisible: () => true,
-    handler: async (): Promise<{ exit: boolean }> => ({ exit: true }),
+    handler: async (): Promise<CommandResult> => ({ exit: true }),
   },
 ];
 
-const COMMAND_LOOKUP = new Map(COMMANDS.map((command) => [command.name, command]));
+const COMMAND_LOOKUP = buildCommandLookup(COMMANDS);
+
+function buildCommandLookup(commands: CommandDefinition[]) {
+  const lookup = new Map<string, CommandDefinition>();
+  for (const command of commands) {
+    const identifiers = [command.name, ...(command.aliases ?? [])];
+    for (const id of identifiers) {
+      lookup.set(id, command);
+    }
+  }
+  return lookup;
+}
+
+function isVisible(command: CommandDefinition, session: SessionRecord | null) {
+  if (typeof command.isVisible === "function") {
+    return command.isVisible(session);
+  }
+  return true;
+}
 
 function visibleCommands(session: SessionRecord | null) {
-  return COMMANDS.filter((command) => command.isVisible(session));
+  return COMMANDS.filter((command) => isVisible(command, session));
 }
 
-async function runCommand(name: string, context: CommandContext) {
-  const command = COMMAND_LOOKUP.get(name);
-  if (!command) {
-    throw new Error(`Command ${name} not found.`);
+function findSubcommand(
+  command: CommandDefinition,
+  token: string,
+): SubcommandDefinition | undefined {
+  const candidates = command.subcommands ?? [];
+  for (const sub of candidates) {
+    const identifiers = [sub.name, ...(sub.aliases ?? [])];
+    if (identifiers.includes(token)) {
+      return sub;
+    }
   }
-  return command.handler(context);
+  return undefined;
 }
 
-export { COMMANDS, COMMAND_LOOKUP, runCommand, visibleCommands };
+function resolveCommandInput(
+  rawInput: string,
+  availableCommands: CommandDefinition[],
+): ResolvedCommand | null {
+  const normalized = rawInput.trim();
+  if (!normalized) {
+    return null;
+  }
 
+  const parts = normalized.split(/\s+/);
+  const [first, ...rest] = parts;
+  const command = COMMAND_LOOKUP.get(first);
+  if (!command || !availableCommands.includes(command)) {
+    return null;
+  }
+
+  if (!rest.length || !(command.subcommands?.length)) {
+    return { command, args: rest };
+  }
+
+  const subcommand = findSubcommand(command, rest[0]);
+  if (!subcommand) {
+    return { command, args: rest };
+  }
+
+  return {
+    command,
+    subcommand,
+    args: rest.slice(1),
+  };
+}
+
+function availableCommandInputs(commands: CommandDefinition[]) {
+  const inputs = new Set<string>();
+  for (const command of commands) {
+    inputs.add(command.name);
+    if (command.subcommands?.length) {
+      for (const sub of command.subcommands) {
+        inputs.add(`${command.name} ${sub.name}`);
+        for (const alias of sub.aliases ?? []) {
+          inputs.add(`${command.name} ${alias}`);
+        }
+      }
+    }
+    for (const alias of command.aliases ?? []) {
+      inputs.add(alias);
+    }
+  }
+  return Array.from(inputs);
+}
+
+async function runCommand(input: string, session: SessionRecord | null) {
+  const commands = visibleCommands(session);
+  const resolved = resolveCommandInput(input, commands);
+  if (!resolved) {
+    throw new Error(`Command ${input} not found.`);
+  }
+
+  const context: CommandContext = {
+    session,
+    rawInput: input,
+    args: resolved.args,
+    command: resolved.command,
+    subcommand: resolved.subcommand,
+  };
+
+  const handler = resolved.subcommand
+    ? resolved.subcommand.handler
+    : resolved.command.handler;
+
+  return handler(context);
+}
+
+export {
+  COMMANDS,
+  COMMAND_LOOKUP,
+  availableCommandInputs,
+  resolveCommandInput,
+  runCommand,
+  visibleCommands,
+};

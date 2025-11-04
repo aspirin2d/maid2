@@ -1,3 +1,8 @@
+import type {
+  CommandDefinition,
+  SubcommandDefinition,
+} from "./core.js";
+
 // ============================================================================
 // Utilities
 // ============================================================================
@@ -44,7 +49,7 @@ async function safeFetch(
   try {
     return await fetch(target, init);
   } catch (error) {
-    console.error(`❌ Network error calling ${target}:`, error);
+    console.error(`Network error calling ${target}:`, error);
     throw error;
   }
 }
@@ -147,7 +152,7 @@ function parseSegment(segment: string): SSEMessage {
 // ============================================================================
 
 function printWelcomeMessage() {
-  console.log("\n✨ Maid CLI ready. Type a command or /help to see options.");
+  console.log("\nMaid CLI ready. Type a command or /help to see options.");
 }
 
 function renderStatus(session: any, appBaseUrl: string) {
@@ -156,35 +161,58 @@ function renderStatus(session: any, appBaseUrl: string) {
     const displayName = session.user.name?.trim()
       ? `${session.user.name} <${session.user.email}>`
       : session.user.email;
-    console.log(`👤 ${displayName}`);
+    console.log(`User: ${displayName}`);
   } else {
-    console.log("🔒 Not logged in");
+    console.log("Not logged in");
   }
 
   if (session?.storedAt) {
     const storedAt = new Date(session.storedAt);
     if (!Number.isNaN(storedAt.valueOf())) {
-      console.log(`🗄️  Session saved: ${storedAt.toLocaleString()}`);
+      console.log(`Session saved: ${storedAt.toLocaleString()}`);
     }
   }
 
-  console.log(`🌐 API base: ${appBaseUrl}`);
+  console.log(`API base: ${appBaseUrl}`);
 }
 
-function renderCommandMenu(commands: any[]) {
+function renderCommandMenu(commands: CommandDefinition[]) {
   console.log("\nAvailable commands:");
-  const nameWidth = commands.reduce(
-    (max, command) => Math.max(max, command.name.length),
+  const commandLabels = commands.map((command) => {
+    const aliases = command.aliases ?? [];
+    return aliases.length
+      ? `${command.name} (${aliases.join(", ")})`
+      : command.name;
+  });
+
+  const nameWidth = commandLabels.reduce(
+    (max, label) => Math.max(max, label.length),
     0,
   );
 
-  for (const command of commands) {
-    const padded = command.name.padEnd(nameWidth, " ");
+  commands.forEach((command, index) => {
+    const label = commandLabels[index];
+    const padded = label.padEnd(nameWidth, " ");
     console.log(`  ${padded}  ${command.description}`);
+    if (command.subcommands?.length) {
+      renderSubcommandMenu(command.subcommands);
+    }
+  });
+}
+
+function renderSubcommandMenu(subcommands: SubcommandDefinition[]) {
+  for (const sub of subcommands) {
+    const aliases = sub.aliases?.length ? ` (${sub.aliases.join(", ")})` : "";
+    const usage = sub.usage ? ` — ${sub.usage}` : "";
+    console.log(`      - ${sub.name}${aliases}${usage}: ${sub.description}`);
   }
 }
 
-function showHelp(session: any, commands: any[], appBaseUrl: string) {
+function showHelp(
+  session: unknown,
+  commands: CommandDefinition[],
+  appBaseUrl: string,
+) {
   renderStatus(session, appBaseUrl);
   renderCommandMenu(commands);
 }

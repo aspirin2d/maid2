@@ -37,19 +37,36 @@ async function buildLiveHandlerInput(): Promise<unknown> {
   const eventType = await select({
     message: "Choose event type",
     choices: [
-      { name: "💬 Simple text (just type a message)", value: "simple_text" },
-      { name: "👤 User chat (regular conversation)", value: "user_chat" },
-      { name: "🎯 Bullet chat (danmaku/弹幕)", value: "bullet_chat" },
-      { name: "📺 Program event (start/finish segment)", value: "program_event" },
-      { name: "🎁 Gift event (donations/gifts)", value: "gift_event" },
-      { name: "❤️ User interaction (follow/subscribe)", value: "user_interaction" },
-      { name: "⚙️ System event (technical notification)", value: "system_event" },
-      { name: "😊 Emotion event (mood change)", value: "emotion_event" },
+      { name: "Clear story messages (/clear)", value: "command_clear" },
+      { name: "Exit chat (/exit)", value: "command_exit" },
+      { name: "Simple text (just type a message)", value: "simple_text" },
+      { name: "User chat (regular conversation)", value: "user_chat" },
+      { name: "Bullet chat (danmaku/弹幕)", value: "bullet_chat" },
+      {
+        name: "Program event (start/finish segment)",
+        value: "program_event",
+      },
+      { name: "Gift event (donations/gifts)", value: "gift_event" },
+      {
+        name: "User interaction (follow/subscribe)",
+        value: "user_interaction",
+      },
+      {
+        name: "System event (technical notification)",
+        value: "system_event",
+      },
+      { name: "Emotion event (mood change)", value: "emotion_event" },
     ],
     default: "simple_text",
   });
 
   // Simple text - just return the text directly (backward compatible)
+  if (eventType === "command_clear") {
+    return "/clear";
+  }
+  if (eventType === "command_exit") {
+    return "/exit";
+  }
   if (eventType === "simple_text") {
     const text = await input({
       message: "Enter your message",
@@ -347,24 +364,26 @@ function formatLiveHandlerOutput(payload: string): boolean {
     return false;
   }
 
-  const data = parsed as { clips?: Array<{ body?: string; face?: string; speech?: string }> };
+  const data = parsed as {
+    clips?: Array<{ body?: string; face?: string; speech?: string }>;
+  };
   if (!Array.isArray(data.clips) || data.clips.length === 0) {
     return false;
   }
 
-  console.log("\n🎬 VTuber Response:");
+  console.log("\nVTuber Response:");
   data.clips.forEach((clip, index) => {
     if (data.clips!.length > 1) {
       console.log(`\n  Clip ${index + 1}/${data.clips!.length}:`);
     }
     if (clip.body) {
-      console.log(`    💃 Body: ${clip.body}`);
+      console.log(`    Body: ${clip.body}`);
     }
     if (clip.face) {
-      console.log(`    😊 Face: ${clip.face}`);
+      console.log(`    Face: ${clip.face}`);
     }
     if (clip.speech) {
-      console.log(`    💬 Speech: ${clip.speech}`);
+      console.log(`    Speech: ${clip.speech}`);
     }
   });
 
@@ -399,7 +418,7 @@ function formatSimpleHandlerOutput(payload: string): boolean {
     return false;
   }
 
-  console.log(`\n📝 Message: ${message}`);
+  console.log(`\nMessage: ${message}`);
   return true;
 }
 

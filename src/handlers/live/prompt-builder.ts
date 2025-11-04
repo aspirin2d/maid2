@@ -93,5 +93,6 @@ export async function buildPrompt(
     "生成1-3个包含body、face和speech字段的片段，以实现富有表现力的VTuber回复。",
   );
 
+  console.log(prompt.join("\n"));
   return prompt.join("\n");
 }

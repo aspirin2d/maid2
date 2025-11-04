@@ -12,71 +12,19 @@ import {
 import { extractErrorMessage, parseJSON } from "./lib.js";
 import { apiFetch } from "./api.js";
 import { SESSION_FILE, AUTH_BASE_URL, APP_BASE_URL } from "./constants.js";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export type SessionRecord = {
-  token: string;
-  session: SessionPayload | null;
-  user: SessionUser | null;
-  storedAt: string;
-  baseURL: string;
-};
-
-export type SessionPayload = {
-  session: {
-    id: string;
-    createdAt: string;
-    updatedAt: string;
-    userId: string;
-    expiresAt: string;
-    token: string;
-    ipAddress?: string | null;
-    userAgent?: string | null;
-  };
-  user: SessionUser;
-};
-
-export type SessionUser = {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  email: string;
-  emailVerified: boolean;
-  name: string | null;
-  image?: string | null;
-};
-
-export type StoryRecord = {
-  id: number;
-  userId: string;
-  name: string;
-  provider: string;
-  handler: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type StoryHandlerInfo = {
-  name: string;
-};
-
-export type CommandContext = {
-  session: SessionRecord | null;
-};
-
-export type CommandOutcome = {
-  exit?: boolean;
-};
-
-export type CommandDefinition = {
-  name: string;
-  description: string;
-  isVisible: (session: SessionRecord | null) => boolean;
-  handler: (context: CommandContext) => Promise<CommandOutcome | void>;
-};
+import type { CommandResult, SessionPayload, SessionRecord } from "./types.js";
+export type {
+  CommandContext,
+  CommandDefinition,
+  CommandResult,
+  MemoryRecord,
+  SessionPayload,
+  SessionRecord,
+  SessionUser,
+  StoryHandlerInfo,
+  StoryRecord,
+  SubcommandDefinition,
+} from "./types.js";
 
 // ============================================================================
 // Session Management
@@ -92,7 +40,7 @@ async function readSessionFile(): Promise<SessionRecord | null> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
     }
-    console.error("⚠️  Unable to read .session file:", error);
+    console.error("Unable to read .session file:", error);
     return null;
   }
 }
@@ -121,7 +69,7 @@ async function fetchSession(token: string) {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`⚠️  Unable to fetch session: ${message}`);
+    console.error(`Unable to fetch session: ${message}`);
     return null;
   }
 
@@ -130,14 +78,18 @@ async function fetchSession(token: string) {
 
 async function executeWithSession(
   sessionRecord: SessionRecord | null,
-  action: (token: string) => Promise<void>,
+  action: (token: string) => Promise<CommandResult | void>,
+  options?: { missingSessionMessage?: string },
 ) {
   if (!sessionRecord?.token) {
-    console.log("⚠️  No active session. Log in before managing stories.");
+    console.log(
+      options?.missingSessionMessage ??
+        "No active session. Log in before continuing.",
+    );
     return;
   }
 
-  await action(sessionRecord.token);
+  return action(sessionRecord.token);
 }
 
 // ============================================================================

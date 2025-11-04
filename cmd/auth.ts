@@ -49,7 +49,7 @@ async function handleAuth(mode: "login" | "signup") {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ ${capitalize(mode)} failed: ${message}`);
+    console.error(`${capitalize(mode)} failed: ${message}`);
     return;
   }
 
@@ -60,9 +60,7 @@ async function handleAuth(mode: "login" | "signup") {
 
   const token = response.headers.get("set-auth-token") ?? data?.token;
   if (!token) {
-    console.error(
-      "❌ Authentication succeeded but no bearer token was returned.",
-    );
+    console.error("Authentication succeeded but no bearer token was returned.");
     return;
   }
 
@@ -79,13 +77,13 @@ async function handleAuth(mode: "login" | "signup") {
   await writeSessionFile(record);
 
   console.log(
-    `✅ ${capitalize(mode)} complete. Session saved for ${record.user?.email ?? email}.`,
+    `${capitalize(mode)} complete. Session saved for ${record.user?.email ?? email}.`,
   );
 }
 
 async function handleLogout(record: SessionRecord | null) {
   if (!record?.token) {
-    console.log("⚠️  You are not logged in.");
+    console.log("You are not logged in.");
     return;
   }
 
@@ -102,13 +100,12 @@ async function handleLogout(record: SessionRecord | null) {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Logout failed: ${message}`);
+    console.error(`Logout failed: ${message}`);
     return;
   }
 
   await clearSessionFile();
-  console.log("✅ Logged out and session removed.");
+  console.log("Logged out and session removed.");
 }
 
 export { handleAuth, handleLogout };
-

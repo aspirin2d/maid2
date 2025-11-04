@@ -46,7 +46,7 @@ async function browseStories(token: string) {
         default: true,
       });
       if (!wantsCreate) {
-        console.log("ℹ️  No stories available.");
+        console.log("No stories available.");
         return;
       }
       await createStoryFlow(token);
@@ -80,7 +80,7 @@ async function browseStories(token: string) {
 
       const deleted = await deleteStoryRequest(token, action.story.id);
       if (deleted) {
-        console.log(`✅ Deleted story ${action.story.id}.`);
+        console.log(`Deleted story ${action.story.id}.`);
       }
       continue;
     }
@@ -95,13 +95,13 @@ async function browseStories(token: string) {
 
       const trimmed = newName.trim();
       if (trimmed === currentName) {
-        console.log("ℹ️  Name unchanged.");
+        console.log("Name unchanged.");
         continue;
       }
 
       const updated = await updateStoryRequest(token, action.story.id, trimmed);
       if (updated) {
-        console.log(`✅ Story renamed to "${updated.name}".`);
+        console.log(`Story renamed to "${updated.name}".`);
       }
     }
   }
@@ -110,13 +110,13 @@ async function browseStories(token: string) {
 async function createStoryFlow(token: string) {
   const provider = await selectProvider();
   if (!provider) {
-    console.log("⚠️  Story creation cancelled (provider not selected).");
+    console.log("Story creation cancelled (provider not selected).");
     return;
   }
 
   const handler = await selectStoryHandler(token);
   if (!handler) {
-    console.log("⚠️  Story creation cancelled (handler not selected).");
+    console.log("Story creation cancelled (handler not selected).");
     return;
   }
 
@@ -127,13 +127,13 @@ async function createStoryFlow(token: string) {
 
   const trimmed = name.trim();
   if (!trimmed) {
-    console.log("⚠️  Story name cannot be empty.");
+    console.log("Story name cannot be empty.");
     return;
   }
 
   const created = await createStoryRequest(token, trimmed, provider, handler);
   if (created) {
-    console.log(`✅ Created story "${created.name}" (id ${created.id}).`);
+    console.log(`Created story "${created.name}" (id ${created.id}).`);
   }
 }
 
@@ -151,7 +151,7 @@ async function fetchStories(token: string): Promise<StoryRecord[]> {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to load stories: ${message}`);
+    console.error(`Failed to load stories: ${message}`);
     return [];
   }
 
@@ -173,7 +173,7 @@ async function deleteStoryRequest(token: string, storyId: number) {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to delete story: ${message}`);
+    console.error(`Failed to delete story: ${message}`);
     return false;
   }
 
@@ -194,7 +194,7 @@ async function clearStoryMessagesRequest(token: string, storyId: number) {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to clear messages: ${message}`);
+    console.error(`Failed to clear messages: ${message}`);
     return null;
   }
 
@@ -222,7 +222,7 @@ async function updateStoryRequest(
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to update story: ${message}`);
+    console.error(`Failed to update story: ${message}`);
     return null;
   }
 
@@ -251,7 +251,7 @@ async function createStoryRequest(
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to create story: ${message}`);
+    console.error(`Failed to create story: ${message}`);
     return null;
   }
 
@@ -319,7 +319,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
 
   printStoryDetails(storyDetails);
   console.log(
-    "\n💬 Entering chat mode. Commands: /handler to switch handlers, /provider to switch providers, /clear to clear all messages, /exit to go back.",
+    "\nEntering chat mode. Commands: /handler to switch handlers, /provider to switch providers, /clear to clear all messages, /exit to go back.",
   );
 
   let handler = storyDetails.handler;
@@ -327,14 +327,20 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
     const available = await fetchHandlers(token, storyRecord.id);
     handler = available[0]?.name ?? "";
     if (!handler) {
-      console.log("⚠️  No handler available. Returning to stories.");
+      console.log("No handler available. Returning to stories.");
       return;
     }
   }
 
-  let provider = storyDetails.provider ?? PROVIDERS[0];
+  const initialProvider =
+    typeof storyDetails.provider === "string" &&
+    PROVIDERS.includes(storyDetails.provider as ProviderOption)
+      ? (storyDetails.provider as ProviderOption)
+      : PROVIDERS[0];
 
-  console.log(`⚙️  Using handler "${handler}" and provider "${provider}".`);
+  let provider: ProviderOption = initialProvider;
+
+  console.log(`Using handler "${handler}" and provider "${provider}".`);
 
   while (true) {
     // Build handler-specific input (uses handler registry)
@@ -343,7 +349,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
       userInput = await buildHandlerInput(handler);
     } catch (error) {
       if (isPromptAbortError(error)) {
-        console.log("\n👋 Leaving chat.");
+        console.log("\nLeaving chat.");
         return;
       }
       throw error;
@@ -352,13 +358,13 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
     // Handle string commands
     if (typeof userInput === "string") {
       if (!userInput) {
-        console.log("⚠️  Message cannot be empty.");
+        console.log("Message cannot be empty.");
         continue;
       }
 
       const command = userInput.toLowerCase();
       if (command === "/exit" || command === "/back" || command === "/quit") {
-        console.log("👋 Leaving chat.");
+        console.log("Leaving chat.");
         return;
       }
 
@@ -372,14 +378,14 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
           if (confirmed) {
             const deletedCount = await clearStoryMessagesRequest(token, storyRecord.id);
             if (deletedCount !== null) {
-              console.log(`🗑️  Cleared ${deletedCount} message(s) from this story.`);
+              console.log(`Cleared ${deletedCount} message(s) from this story.`);
             }
           } else {
-            console.log("❌ Clear cancelled.");
+            console.log("Clear cancelled.");
           }
         } catch (error) {
           if (isPromptAbortError(error)) {
-            console.log("❌ Clear cancelled.");
+            console.log("Clear cancelled.");
           } else {
             throw error;
           }
@@ -391,7 +397,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
         const next = await selectStoryHandler(token, storyRecord.id, handler);
         if (next) {
           handler = next;
-          console.log(`🔁 Using handler "${handler}".`);
+          console.log(`Using handler "${handler}".`);
         }
         continue;
       }
@@ -400,7 +406,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
         const nextProvider = await selectProvider(provider);
         if (nextProvider) {
           provider = nextProvider;
-          console.log(`🔁 Using provider "${provider}".`);
+          console.log(`Using provider "${provider}".`);
         }
         continue;
       }
@@ -410,7 +416,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
     const displayMessage = typeof userInput === "string"
       ? userInput
       : JSON.stringify(userInput, null, 2);
-    console.log(`\n🧑 You: ${displayMessage}`);
+    console.log(`\nYou: ${displayMessage}`);
 
     // Stream the conversation
     await streamStoryConversation({
@@ -430,7 +436,7 @@ async function selectStoryHandler(
 ) {
   const handlers = await fetchHandlers(token, storyId);
   if (handlers.length === 0) {
-    console.log("⚠️  No story handlers are available.");
+    console.log("No story handlers are available.");
     return null;
   }
 
@@ -456,8 +462,16 @@ async function selectStoryHandler(
   }
 }
 
-async function selectProvider(current?: ProviderOption) {
-  const defaultIndex = Math.max(0, current ? PROVIDERS.indexOf(current) : 0);
+async function selectProvider(current?: ProviderOption | string | null) {
+  const normalized =
+    typeof current === "string" && PROVIDERS.includes(current as ProviderOption)
+      ? (current as ProviderOption)
+      : undefined;
+
+  const defaultIndex = Math.max(
+    0,
+    normalized ? PROVIDERS.indexOf(normalized) : 0,
+  );
 
   try {
     return await select<ProviderOption>({
@@ -498,7 +512,7 @@ async function streamStoryConversation({
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Streaming failed: ${message}`);
+    console.error(`Streaming failed: ${message}`);
     return;
   }
 
@@ -509,25 +523,25 @@ async function streamStoryConversation({
         response,
       );
       if (body?.ok) {
-        console.log("ℹ️  Handler completed without streaming output.");
+        console.log("Handler completed without streaming output.");
         return;
       }
       if (body?.message) {
-        console.log(`ℹ️  ${body.message}`);
+        console.log(body.message);
         return;
       }
     } else {
       const text = await response.text();
       if (text) {
-        console.log(`ℹ️  ${text}`);
+        console.log(text);
         return;
       }
     }
-    console.log("ℹ️  Received response without stream content.");
+    console.log("Received response without stream content.");
     return;
   }
 
-  console.log("\n🤖 Assistant:");
+  console.log("\nAssistant:");
   let collected = "";
   let sawThinking = false;
   let sawError = false;
@@ -542,7 +556,7 @@ async function streamStoryConversation({
         }
         case "thinking": {
           sawThinking = true;
-          console.log(`💭 ${data}`);
+          console.log(`Thinking: ${data}`);
           break;
         }
         case "delta": {
@@ -554,14 +568,14 @@ async function streamStoryConversation({
           if (collected && !collected.endsWith("\n")) {
             process.stdout.write("\n");
           }
-          console.log("✅ Finished.");
+          console.log("Finished.");
           break;
         }
         case "error": {
           if (collected && !collected.endsWith("\n")) {
             process.stdout.write("\n");
           }
-          console.error(`❌ ${data}`);
+          console.error(data);
           sawError = true;
           break;
         }
@@ -577,7 +591,7 @@ async function streamStoryConversation({
       process.stdout.write("\n");
     }
     console.error(
-      `❌ Streaming interrupted: ${
+      `Streaming interrupted: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
@@ -619,7 +633,7 @@ async function fetchHandlers(
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to load handlers: ${message}`);
+    console.error(`Failed to load handlers: ${message}`);
     return [];
   }
 
@@ -647,7 +661,7 @@ async function fetchStoryDetails(token: string, storyId: number) {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to load story: ${message}`);
+    console.error(`Failed to load story: ${message}`);
     return null;
   }
 
@@ -659,7 +673,7 @@ function printStoryDetails(storyRecord: StoryRecord) {
   const created = formatTimestamp(storyRecord.createdAt);
   const updated = formatTimestamp(storyRecord.updatedAt);
 
-  console.log("\n📘 Story Details");
+  console.log("\nStory Details");
   console.log(`   ID: ${storyRecord.id}`);
   console.log(`   Name: ${storyRecord.name}`);
   console.log(`   Owner: ${storyRecord.userId}`);
@@ -692,8 +706,230 @@ function displayParsedResponse(handler: string, payload: string) {
 
 function displayRawResponse(content: string) {
   if (!content.trim()) return;
-  console.log("\n📦 Raw response:");
+  console.log("\nRaw response:");
   console.log(content);
+}
+
+// ============================================================================
+// Direct Story Commands (used by CLI subcommands)
+// ============================================================================
+
+async function resolveStoryFromArgs(
+  token: string,
+  storyIdArg?: string,
+  promptMessage = "Select a story",
+): Promise<StoryRecord | null> {
+  if (storyIdArg) {
+    const id = Number.parseInt(storyIdArg, 10);
+    if (Number.isNaN(id)) {
+      console.log(`Story id must be a number (received "${storyIdArg}").`);
+      return null;
+    }
+
+    const story = await fetchStoryDetails(token, id);
+    if (!story) {
+      console.log(`Story ${id} was not found.`);
+      return null;
+    }
+    return story;
+  }
+
+  return selectStoryInteractively(token, promptMessage);
+}
+
+async function selectStoryInteractively(
+  token: string,
+  message: string,
+): Promise<StoryRecord | null> {
+  const stories = await fetchStories(token);
+  if (stories.length === 0) {
+    console.log("No stories found.");
+    return null;
+  }
+
+  try {
+    return await select<StoryRecord>({
+      message,
+      choices: stories.map((story) => ({
+        name: `[${story.id}] ${story.name}`,
+        value: story,
+      })),
+    });
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Selection cancelled.");
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function listStoriesCommand(token: string) {
+  const stories = await fetchStories(token);
+  if (stories.length === 0) {
+    console.log("No stories found.");
+    return;
+  }
+
+  console.log(`\nStories (${stories.length}):`);
+  for (const story of stories) {
+    const updated = formatTimestamp(story.updatedAt);
+    console.log(
+      `  [${story.id}] ${story.name} — provider: ${story.provider}, handler: ${story.handler} (updated ${updated})`,
+    );
+  }
+}
+
+async function createStoryCommand(token: string) {
+  await createStoryFlow(token);
+}
+
+async function renameStoryCommand(token: string, args: string[]) {
+  const [storyIdArg, ...nameParts] = args;
+  const story = await resolveStoryFromArgs(
+    token,
+    storyIdArg,
+    "Select a story to rename",
+  );
+  if (!story) {
+    return;
+  }
+
+  let desiredName = nameParts.join(" ").trim();
+  if (!desiredName) {
+    desiredName = await input({
+      message: "New story name",
+      default: story.name,
+      validate: requiredField("Story name"),
+    });
+  }
+
+  const trimmed = desiredName.trim();
+  if (!trimmed) {
+    console.log("Story name cannot be empty.");
+    return;
+  }
+  if (trimmed === story.name) {
+    console.log("Name unchanged.");
+    return;
+  }
+
+  const updated = await updateStoryRequest(token, story.id, trimmed);
+  if (updated) {
+    console.log(`Story renamed to "${updated.name}".`);
+  }
+}
+
+async function deleteStoryCommand(token: string, args: string[]) {
+  const [storyIdArg] = args;
+  const story = await resolveStoryFromArgs(
+    token,
+    storyIdArg,
+    "Select a story to delete",
+  );
+  if (!story) {
+    return;
+  }
+
+  let confirmed = false;
+  try {
+    confirmed = await confirm({
+      message: `Delete "${story.name}"?`,
+      default: false,
+    });
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Deletion cancelled.");
+      return;
+    }
+    throw error;
+  }
+
+  if (!confirmed) {
+    console.log("Deletion cancelled.");
+    return;
+  }
+
+  const deleted = await deleteStoryRequest(token, story.id);
+  if (deleted) {
+    console.log(`Deleted story ${story.id}.`);
+  }
+}
+
+async function chatStoryCommand(token: string, args: string[]) {
+  const [storyIdArg] = args;
+  const story = await resolveStoryFromArgs(
+    token,
+    storyIdArg,
+    "Select a story to chat with",
+  );
+  if (!story) {
+    return;
+  }
+  await chatWithStory(token, story);
+}
+
+async function clearStoryMessagesCommand(token: string, args: string[]) {
+  const [storyIdArg] = args;
+  const story = await resolveStoryFromArgs(
+    token,
+    storyIdArg,
+    "Select a story to clear messages from",
+  );
+  if (!story) {
+    return;
+  }
+
+  let confirmed = false;
+  try {
+    confirmed = await confirm({
+      message: `Clear all messages for "${story.name}"?`,
+      default: false,
+    });
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Clear cancelled.");
+      return;
+    }
+    throw error;
+  }
+
+  if (!confirmed) {
+    console.log("Clear cancelled.");
+    return;
+  }
+
+  const deletedCount = await clearStoryMessagesRequest(token, story.id);
+  if (deletedCount !== null) {
+    console.log(`Cleared ${deletedCount} message(s) from ${story.name}.`);
+  }
+}
+
+async function listStoryHandlersCommand(token: string, args: string[]) {
+  const [storyIdArg] = args;
+  let contextStory: StoryRecord | null = null;
+  if (storyIdArg) {
+    contextStory = await resolveStoryFromArgs(token, storyIdArg);
+    if (!contextStory) {
+      return;
+    }
+  }
+
+  const handlers = await fetchHandlers(token, contextStory?.id);
+  if (handlers.length === 0) {
+    console.log("No story handlers are available.");
+    return;
+  }
+
+  if (contextStory) {
+    console.log(`Handlers for story ${contextStory.id} (${contextStory.name}):`);
+  } else {
+    console.log("Available story handlers:");
+  }
+
+  for (const handler of handlers) {
+    console.log(`  - ${handler.name}`);
+  }
 }
 
 export {
@@ -704,4 +940,11 @@ export {
   printStoryDetails,
   selectProvider,
   selectStoryHandler,
+  clearStoryMessagesCommand,
+  createStoryCommand,
+  deleteStoryCommand,
+  listStoryHandlersCommand,
+  listStoriesCommand,
+  renameStoryCommand,
+  chatStoryCommand,
 };

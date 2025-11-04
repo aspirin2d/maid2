@@ -10,6 +10,7 @@ import {
   isPromptAbortError,
   menuPrompt,
   type MenuResult,
+  type MemoryRecord,
 } from "./core.js";
 import { apiFetch } from "./api.js";
 import { MEMORY_CATEGORIES, type MemoryCategory } from "./constants.js";
@@ -42,20 +43,6 @@ const CATEGORY_CHOICES = [
   })),
 ];
 
-// Memory record type
-export type MemoryRecord = {
-  id: number;
-  userId: string;
-  content: string | null;
-  prevContent: string | null;
-  category: MemoryCategory | null;
-  importance: number | null;
-  confidence: number | null;
-  action: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
 type MemoryMenuResult =
   | { type: "exit" }
   | { type: "create" }
@@ -72,7 +59,7 @@ async function browseMemories(token: string) {
   while (true) {
     const memories = await fetchMemories(token);
     if (memories.length === 0) {
-      console.log("ℹ️  No memories found.");
+      console.log("No memories found.");
 
       // Prompt to create the first memory
       const shouldCreate = await confirm({
@@ -83,7 +70,7 @@ async function browseMemories(token: string) {
       if (shouldCreate) {
         const created = await promptAndCreateMemory(token);
         if (created) {
-          console.log(`✅ Created memory ${created.id}.`);
+          console.log(`Created memory ${created.id}.`);
         }
       }
 
@@ -102,7 +89,7 @@ async function browseMemories(token: string) {
     if (action.type === "create") {
       const created = await promptAndCreateMemory(token);
       if (created) {
-        console.log(`✅ Created memory ${created.id}.`);
+        console.log(`Created memory ${created.id}.`);
       }
       continue;
     }
@@ -110,7 +97,7 @@ async function browseMemories(token: string) {
     if (action.type === "edit") {
       const updated = await promptAndEditMemory(token, action.memory);
       if (updated) {
-        console.log(`✅ Updated memory ${updated.id}.`);
+        console.log(`Updated memory ${updated.id}.`);
       }
       continue;
     }
@@ -131,16 +118,16 @@ async function browseMemories(token: string) {
 
       const deleted = await deleteMemoryRequest(token, action.memory.id);
       if (deleted) {
-        console.log(`✅ Deleted memory ${action.memory.id}.`);
+        console.log(`Deleted memory ${action.memory.id}.`);
       }
       continue;
     }
 
     if (action.type === "extract") {
-      console.log("🔄 Extracting memories from messages...");
+      console.log("Extracting memories from messages...");
       const result = await extractMemoriesRequest(token);
       if (result) {
-        console.log(`✅ Extraction complete!`);
+        console.log(`Extraction complete!`);
         console.log(`   Messages extracted: ${result.messagesExtracted}`);
         console.log(`   Facts extracted: ${result.factsExtracted}`);
         console.log(`   Memories updated: ${result.memoriesUpdated}`);
@@ -227,7 +214,7 @@ async function promptAndEditMemory(
 
     // If nothing changed, return the original memory
     if (Object.keys(updates).length === 0) {
-      console.log("ℹ️  No changes made.");
+      console.log("No changes made.");
       return memory;
     }
 
@@ -255,7 +242,7 @@ async function fetchMemories(token: string): Promise<MemoryRecord[]> {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to load memories: ${message}`);
+    console.error(`Failed to load memories: ${message}`);
     return [];
   }
 
@@ -277,7 +264,7 @@ async function deleteMemoryRequest(token: string, memoryId: number) {
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to delete memory: ${message}`);
+    console.error(`Failed to delete memory: ${message}`);
     return false;
   }
 
@@ -313,7 +300,7 @@ async function createMemoryRequest(
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to create memory: ${message}`);
+    console.error(`Failed to create memory: ${message}`);
     return null;
   }
 
@@ -351,7 +338,7 @@ async function updateMemoryRequest(
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to update memory: ${message}`);
+    console.error(`Failed to update memory: ${message}`);
     return null;
   }
 
@@ -379,7 +366,7 @@ async function extractMemoriesRequest(token: string): Promise<{
 
   if (!response.ok) {
     const message = await extractErrorMessage(response);
-    console.error(`❌ Failed to extract memories: ${message}`);
+    console.error(`Failed to extract memories: ${message}`);
     return null;
   }
 
@@ -465,7 +452,7 @@ function printMemoryDetails(memory: MemoryRecord) {
   const created = formatTimestamp(memory.createdAt);
   const updated = formatTimestamp(memory.updatedAt);
 
-  console.log("\n📝 Memory Details");
+  console.log("\nMemory Details");
   console.log(`   ID: ${memory.id}`);
   console.log(`   Category: ${memory.category || "N/A"}`);
   console.log(`   Content: ${memory.content || "(empty)"}`);
@@ -484,4 +471,177 @@ function printMemoryDetails(memory: MemoryRecord) {
   console.log();
 }
 
-export { browseMemories };
+// ============================================================================
+// Direct Memory Commands (used by CLI subcommands)
+// ============================================================================
+
+async function resolveMemoryFromArgs(
+  token: string,
+  memoryIdArg?: string,
+  promptMessage = "Select a memory",
+): Promise<MemoryRecord | null> {
+  const memories = await fetchMemories(token);
+  if (memories.length === 0) {
+    console.log("No memories found.");
+    return null;
+  }
+
+  if (memoryIdArg) {
+    const id = Number.parseInt(memoryIdArg, 10);
+    if (Number.isNaN(id)) {
+      console.log(`Memory id must be a number (received "${memoryIdArg}").`);
+      return null;
+    }
+
+    const found = memories.find((memory) => memory.id === id);
+    if (!found) {
+      console.log(`Memory ${id} was not found.`);
+      return null;
+    }
+    return found;
+  }
+
+  return selectMemoryInteractively(memories, promptMessage);
+}
+
+async function selectMemoryInteractively(
+  memories: MemoryRecord[],
+  message: string,
+): Promise<MemoryRecord | null> {
+  try {
+    return await select<MemoryRecord>({
+      message,
+      choices: memories.map((memory) => {
+        const preview =
+          memory.content && memory.content.length > 60
+            ? `${memory.content.slice(0, 60)}…`
+            : memory.content || "(empty)";
+        const category = memory.category ? `[${memory.category}] ` : "";
+        return {
+          name: `[${memory.id}] ${category}${preview}`,
+          value: memory,
+        };
+      }),
+    });
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Selection cancelled.");
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function listMemoriesCommand(token: string) {
+  const memories = await fetchMemories(token);
+  if (memories.length === 0) {
+    console.log("No memories found.");
+    return;
+  }
+
+  console.log(`\nMemories (${memories.length}):`);
+  for (const memory of memories) {
+    const category = memory.category ? `[${memory.category}] ` : "";
+    const preview =
+      memory.content && memory.content.length > 60
+        ? `${memory.content.slice(0, 60)}…`
+        : memory.content || "(empty)";
+    const updated = formatTimestamp(memory.updatedAt);
+    console.log(
+      `  [${memory.id}] ${category}${preview} (updated ${updated})`,
+    );
+  }
+}
+
+async function viewMemoryCommand(token: string, args: string[]) {
+  const [memoryIdArg] = args;
+  const memory = await resolveMemoryFromArgs(
+    token,
+    memoryIdArg,
+    "Select a memory to view",
+  );
+  if (!memory) {
+    return;
+  }
+  printMemoryDetails(memory);
+}
+
+async function createMemoryCommand(token: string) {
+  const created = await promptAndCreateMemory(token);
+  if (created) {
+    console.log(`Created memory ${created.id}.`);
+  }
+}
+
+async function editMemoryCommand(token: string, args: string[]) {
+  const [memoryIdArg] = args;
+  const memory = await resolveMemoryFromArgs(
+    token,
+    memoryIdArg,
+    "Select a memory to edit",
+  );
+  if (!memory) {
+    return;
+  }
+  const updated = await promptAndEditMemory(token, memory);
+  if (updated) {
+    console.log(`Updated memory ${updated.id}.`);
+  }
+}
+
+async function deleteMemoryCommand(token: string, args: string[]) {
+  const [memoryIdArg] = args;
+  const memory = await resolveMemoryFromArgs(
+    token,
+    memoryIdArg,
+    "Select a memory to delete",
+  );
+  if (!memory) {
+    return;
+  }
+
+  let confirmed = false;
+  try {
+    confirmed = await confirm({
+      message: `Delete memory ${memory.id}?`,
+      default: false,
+    });
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Deletion cancelled.");
+      return;
+    }
+    throw error;
+  }
+
+  if (!confirmed) {
+    console.log("Deletion cancelled.");
+    return;
+  }
+
+  const deleted = await deleteMemoryRequest(token, memory.id);
+  if (deleted) {
+    console.log(`Deleted memory ${memory.id}.`);
+  }
+}
+
+async function extractMemoriesCommand(token: string) {
+  console.log("Extracting memories from messages...");
+  const result = await extractMemoriesRequest(token);
+  if (result) {
+    console.log(`Extraction complete!`);
+    console.log(`   Messages extracted: ${result.messagesExtracted}`);
+    console.log(`   Facts extracted: ${result.factsExtracted}`);
+    console.log(`   Memories updated: ${result.memoriesUpdated}`);
+  }
+}
+
+export {
+  browseMemories,
+  createMemoryCommand,
+  deleteMemoryCommand,
+  editMemoryCommand,
+  extractMemoriesCommand,
+  listMemoriesCommand,
+  viewMemoryCommand,
+};
