@@ -10,7 +10,7 @@ import {
   buildChatHistory,
 } from "./context/index.js";
 import type { LiveEvent } from "./events.js";
-import { buildEventSpecificPrompt } from "./event-prompt-builders.js";
+import { buildEventSpecificPrompt } from "./event-builders/index.js";
 
 /**
  * Cached system prompt to avoid repeated string concatenation
