@@ -15,14 +15,22 @@ export async function getMessagesByStory(
   options?: { limit?: number; offset?: number; lastN?: number },
 ) {
   const baseQuery = db
-    .select({ role: message.role, content: message.content })
+    .select({
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt,
+    })
     .from(message)
     .where(eq(message.storyId, storyId));
 
   // If lastN is specified, get the most recent N messages
   if (options?.lastN !== undefined) {
     const recentMessages = await db
-      .select({ role: message.role, content: message.content })
+      .select({
+        role: message.role,
+        content: message.content,
+        createdAt: message.createdAt,
+      })
       .from(message)
       .where(eq(message.storyId, storyId))
       .orderBy(desc(message.createdAt))

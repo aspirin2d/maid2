@@ -110,7 +110,7 @@ async function buildMemoryContext(
 }
 
 /**
- * Build chat history section
+ * Build chat history section with relative time
  */
 async function buildChatHistory(
   ctx: StoryContext,
@@ -128,8 +128,10 @@ async function buildChatHistory(
     lines.push("（没有之前的对话）");
   } else {
     for (const row of chatHistory) {
+      const timeInfo = row.createdAt ? ` [${dayjs(row.createdAt).fromNow()}]` : "";
+
       if (row.role === "user") {
-        lines.push(`用户: ${row.content}`);
+        lines.push(`用户${timeInfo}: ${row.content}`);
       } else if (row.role === "assistant") {
         // Parse clips and extract speech
         try {
@@ -143,7 +145,7 @@ async function buildChatHistory(
               )
               .join("");
             if (speeches.length > 0) {
-              lines.push(`VTuber: ${speeches}`);
+              lines.push(`VTuber${timeInfo}: ${speeches}`);
             }
           }
         } catch (error) {
