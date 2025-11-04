@@ -7,6 +7,7 @@ import {
   type StoryHandler,
 } from "../index.js";
 import { buildPrompt } from "./prompt-builder.js";
+import { extractRequestText } from "./utils.js";
 
 const clipSchema = z.object({
   body: z.string().describe("身体动作/姿势描"),
@@ -27,32 +28,6 @@ const inputSchema = z.union([
     input: z.string().optional(),
   }),
 ]);
-
-/**
- * Extract text content from various input formats
- */
-function extractRequestText(input: unknown): string | null {
-  if (typeof input === "string") {
-    const trimmed = input.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-  if (input && typeof input === "object") {
-    const candidate =
-      (input as Record<string, unknown>).prompt ??
-      (input as Record<string, unknown>).question ??
-      (input as Record<string, unknown>).message ??
-      (input as Record<string, unknown>).input;
-    if (typeof candidate === "string" && candidate.trim().length > 0) {
-      return candidate.trim();
-    }
-    try {
-      return JSON.stringify(input);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
 
 const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
   let userInput: any = null;
