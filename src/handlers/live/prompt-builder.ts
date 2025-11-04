@@ -1,5 +1,4 @@
 import type { StoryContext, HandlerConfig } from "../index.js";
-import { extractRequestText } from "./utils.js";
 import {
   getCharacterBasicSettings,
   getStreamProgramSettings,
@@ -10,6 +9,8 @@ import {
   buildMemoryContext,
   buildChatHistory,
 } from "./context/index.js";
+import type { LiveEvent } from "./events.js";
+import { buildEventSpecificPrompt } from "./event-builders/index.js";
 
 /**
  * Cached system prompt to avoid repeated string concatenation
@@ -39,12 +40,14 @@ function getDefaultSystemPrompt(): string {
  * This is the main orchestrator that assembles the final prompt by:
  * 1. Getting the system prompt (character settings, stream info, format)
  * 2. Adding current time context
- * 3. Fetching relevant memories and chat history in parallel
- * 4. Adding the current user request
- * 5. Adding final instructions for JSON formatting
+ * 3. Dispatching to event-specific prompt builder
+ * 4. Conditionally fetching memories based on event type
+ * 5. Fetching chat history
+ * 6. Assembling all sections with event-specific content
+ * 7. Adding final instructions for JSON formatting
  */
 export async function buildPrompt(
-  input: any,
+  event: LiveEvent,
   ctx: StoryContext,
   config?: HandlerConfig,
 ): Promise<string> {
@@ -56,31 +59,33 @@ export async function buildPrompt(
 
   // Add current time context
   prompt.push(buildTimeContext());
+  prompt.push("");
 
-  // Extract user request for memory search
-  const request = extractRequestText(input);
+  // Get event-specific prompt sections and metadata
+  const eventPromptResult = await buildEventSpecificPrompt(event, ctx, config);
 
-  // Parallelize independent async operations for better performance
+  // Conditionally fetch memory and chat history in parallel
+  // Only fetch memories if the event type requires it
   const [memoryContext, chatHistory] = await Promise.all([
-    buildMemoryContext(request, ctx, config),
+    eventPromptResult.requiresMemory
+      ? buildMemoryContext(eventPromptResult.searchText, ctx, config)
+      : Promise.resolve(null),
     buildChatHistory(ctx, messageLimit),
   ]);
 
   // Add memory context if available
   if (memoryContext) {
     prompt.push(memoryContext);
+    prompt.push("");
   }
 
   // Add chat history
   prompt.push(chatHistory);
   prompt.push("");
 
-  // Add current request
-  if (request) {
-    prompt.push("## 当前请求");
-    prompt.push(request);
-    prompt.push("");
-  }
+  // Add event-specific prompt sections
+  prompt.push(...eventPromptResult.sections);
+  prompt.push("");
 
   // Add final instructions
   prompt.push(
