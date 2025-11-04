@@ -1,5 +1,4 @@
 import type { StoryContext, HandlerConfig } from "../index.js";
-import { extractRequestText } from "./utils.js";
 import {
   getCharacterBasicSettings,
   getStreamProgramSettings,
@@ -10,7 +9,8 @@ import {
   buildMemoryContext,
   buildChatHistory,
 } from "./context/index.js";
-import { getEventContext, type LiveEvent } from "./events.js";
+import type { LiveEvent } from "./events.js";
+import { buildEventSpecificPrompt } from "./event-prompt-builders.js";
 
 /**
  * Cached system prompt to avoid repeated string concatenation
@@ -40,9 +40,11 @@ function getDefaultSystemPrompt(): string {
  * This is the main orchestrator that assembles the final prompt by:
  * 1. Getting the system prompt (character settings, stream info, format)
  * 2. Adding current time context
- * 3. Fetching relevant memories and chat history in parallel
- * 4. Adding the current event/request context
- * 5. Adding final instructions for JSON formatting
+ * 3. Dispatching to event-specific prompt builder
+ * 4. Conditionally fetching memories based on event type
+ * 5. Fetching chat history
+ * 6. Assembling all sections with event-specific content
+ * 7. Adding final instructions for JSON formatting
  */
 export async function buildPrompt(
   event: LiveEvent,
@@ -57,33 +59,33 @@ export async function buildPrompt(
 
   // Add current time context
   prompt.push(buildTimeContext());
+  prompt.push("");
 
-  // Extract event context and text for memory search
-  const eventContext = getEventContext(event);
-  const searchText = extractEventTextForMemory(event);
+  // Get event-specific prompt sections and metadata
+  const eventPromptResult = await buildEventSpecificPrompt(event, ctx, config);
 
-  // Parallelize independent async operations for better performance
+  // Conditionally fetch memory and chat history in parallel
+  // Only fetch memories if the event type requires it
   const [memoryContext, chatHistory] = await Promise.all([
-    buildMemoryContext(searchText, ctx, config),
+    eventPromptResult.requiresMemory
+      ? buildMemoryContext(eventPromptResult.searchText, ctx, config)
+      : Promise.resolve(null),
     buildChatHistory(ctx, messageLimit),
   ]);
 
   // Add memory context if available
   if (memoryContext) {
     prompt.push(memoryContext);
+    prompt.push("");
   }
 
   // Add chat history
   prompt.push(chatHistory);
   prompt.push("");
 
-  // Add current event/request with appropriate section header
-  if (eventContext) {
-    const sectionHeader = getEventSectionHeader(event);
-    prompt.push(`## ${sectionHeader}`);
-    prompt.push(eventContext);
-    prompt.push("");
-  }
+  // Add event-specific prompt sections
+  prompt.push(...eventPromptResult.sections);
+  prompt.push("");
 
   // Add final instructions
   prompt.push(
@@ -92,46 +94,4 @@ export async function buildPrompt(
   );
 
   return prompt.join("\n");
-}
-
-/**
- * Extract text from event for memory search
- * Only certain event types are relevant for memory lookup
- */
-function extractEventTextForMemory(event: LiveEvent): string | null {
-  switch (event.type) {
-    case "user_chat":
-      return event.data.message;
-    case "bullet_chat":
-      return event.data.message;
-    case "simple_text":
-      return event.data.text;
-    default:
-      // Other event types don't need memory search
-      return null;
-  }
-}
-
-/**
- * Get appropriate section header for different event types
- */
-function getEventSectionHeader(event: LiveEvent): string {
-  switch (event.type) {
-    case "user_chat":
-    case "bullet_chat":
-    case "simple_text":
-      return "当前请求";
-    case "program_event":
-      return "节目状态变化";
-    case "gift_event":
-      return "收到礼物";
-    case "user_interaction":
-      return "用户互动";
-    case "system_event":
-      return "系统事件";
-    case "emotion_event":
-      return "情绪事件";
-    default:
-      return "当前事件";
-  }
 }
