@@ -176,9 +176,15 @@ export type LiveInput = z.infer<typeof liveInputSchema>;
 
 /**
  * Normalize legacy input formats to event format
+ *
+ * Converts various input formats (string, legacy object, or event) into
+ * a standardized LiveEvent format for consistent processing.
+ *
+ * @param input - Raw input in any supported format
+ * @returns Normalized LiveEvent
  */
 export function normalizeToEvent(input: LiveInput): LiveEvent {
-  // Already an event
+  // Already an event - return as-is
   if (typeof input === "object" && "type" in input) {
     return input as LiveEvent;
   }
@@ -207,6 +213,12 @@ export function normalizeToEvent(input: LiveInput): LiveEvent {
 
 /**
  * Extract displayable text from any event for chat history
+ *
+ * Converts events into human-readable text suitable for saving as
+ * user messages in the chat history.
+ *
+ * @param event - The event to extract text from
+ * @returns Formatted text representation, or null if not applicable
  */
 export function extractEventText(event: LiveEvent): string | null {
   switch (event.type) {
@@ -216,27 +228,40 @@ export function extractEventText(event: LiveEvent): string | null {
     case "bullet_chat":
       return `[弹幕] ${event.data.message}`;
 
-    case "program_event":
-      return `[节目${event.data.action === "start" ? "开始" : event.data.action === "finish" ? "结束" : event.data.action}] ${event.data.programName}`;
+    case "program_event": {
+      const actionMap = {
+        start: "开始",
+        finish: "结束",
+        pause: "暂停",
+        resume: "恢复",
+      };
+      const action = actionMap[event.data.action] || event.data.action;
+      return `[节目${action}] ${event.data.programName}`;
+    }
 
-    case "gift_event":
+    case "gift_event": {
       const giftMsg = `[礼物] ${event.data.username} 送出了 ${event.data.giftCount}x ${event.data.giftName}`;
       return event.data.message ? `${giftMsg}: ${event.data.message}` : giftMsg;
+    }
 
-    case "user_interaction":
-      const actionText = {
+    case "user_interaction": {
+      const actionMap = {
         follow: "关注",
         subscribe: "订阅",
         like: "点赞",
         share: "分享",
-      }[event.data.action];
+      };
+      const actionText = actionMap[event.data.action];
       return `[${actionText}] ${event.data.username}`;
+    }
 
     case "system_event":
       return `[系统] ${event.data.message || event.data.eventType}`;
 
-    case "emotion_event":
-      return `[情绪变化] ${event.data.emotion}${event.data.trigger ? ` (触发: ${event.data.trigger})` : ""}`;
+    case "emotion_event": {
+      const trigger = event.data.trigger ? ` (触发: ${event.data.trigger})` : "";
+      return `[情绪变化] ${event.data.emotion}${trigger}`;
+    }
 
     case "simple_text":
       return event.data.text;
@@ -248,20 +273,28 @@ export function extractEventText(event: LiveEvent): string | null {
 
 /**
  * Get context description for an event to include in the prompt
+ *
+ * Generates detailed context strings for each event type, optimized
+ * for inclusion in LLM prompts to provide rich contextual information.
+ *
+ * @param event - The event to generate context for
+ * @returns Formatted context string
  */
 export function getEventContext(event: LiveEvent): string {
   switch (event.type) {
-    case "user_chat":
+    case "user_chat": {
       const userPrefix = event.data.username
         ? `${event.data.username}: `
         : "用户: ";
       return `${userPrefix}${event.data.message}`;
+    }
 
-    case "bullet_chat":
+    case "bullet_chat": {
       const bulletPrefix = event.data.username
         ? `[弹幕] ${event.data.username}: `
         : "[弹幕] ";
       return `${bulletPrefix}${event.data.message}`;
+    }
 
     case "program_event":
       return buildProgramContext(event);
@@ -272,8 +305,10 @@ export function getEventContext(event: LiveEvent): string {
     case "user_interaction":
       return buildInteractionContext(event);
 
-    case "system_event":
-      return `[系统事件: ${event.data.eventType}] ${event.data.message || ""}${event.data.severity !== "info" ? ` (${event.data.severity})` : ""}`;
+    case "system_event": {
+      const severityText = event.data.severity !== "info" ? ` (${event.data.severity})` : "";
+      return `[系统事件: ${event.data.eventType}] ${event.data.message || ""}${severityText}`;
+    }
 
     case "emotion_event":
       return buildEmotionContext(event);
@@ -286,6 +321,12 @@ export function getEventContext(event: LiveEvent): string {
   }
 }
 
+// ==================== Event Context Builders ====================
+// Helper functions for building detailed context strings for complex events
+
+/**
+ * Build detailed context for program transition events
+ */
 function buildProgramContext(event: Extract<LiveEvent, { type: "program_event" }>): string {
   const actionText = {
     start: "开始",
@@ -316,6 +357,9 @@ function buildProgramContext(event: Extract<LiveEvent, { type: "program_event" }
   return context;
 }
 
+/**
+ * Build detailed context for gift/donation events
+ */
 function buildGiftContext(event: Extract<LiveEvent, { type: "gift_event" }>): string {
   let context = `[收到礼物] ${event.data.username} 送出了 ${event.data.giftCount}x ${event.data.giftName}`;
 
@@ -330,6 +374,9 @@ function buildGiftContext(event: Extract<LiveEvent, { type: "gift_event" }>): st
   return context;
 }
 
+/**
+ * Build detailed context for user interaction events (follow, subscribe, etc.)
+ */
 function buildInteractionContext(
   event: Extract<LiveEvent, { type: "user_interaction" }>,
 ): string {
@@ -354,6 +401,9 @@ function buildInteractionContext(
   return context;
 }
 
+/**
+ * Build detailed context for emotion/mood events
+ */
 function buildEmotionContext(event: Extract<LiveEvent, { type: "emotion_event" }>): string {
   let context = `[情绪] ${event.data.emotion}`;
 
