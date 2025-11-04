@@ -22,8 +22,8 @@ export interface HandlerMetadata {
   name: string;
   description: string;
   version?: string;
-  inputSchema?: ZodType;  // What inputs does this handler accept?
-  outputSchema?: ZodType;  // What does it output to the LLM?
+  inputSchema?: ZodType; // What inputs does this handler accept?
+  outputSchema?: ZodType; // What does it output to the LLM?
   capabilities?: {
     supportsThinking?: boolean;
     supportsCaching?: boolean;
@@ -55,9 +55,9 @@ export interface StoryHandler {
 
   // Lifecycle hooks - return pure data (decoupled from SSE protocol)
   onStart(): void;
-  onContent(content: string): string;  // Returns processed content
+  onContent(content: string): string; // Returns processed content
   onThinking(content: string): string; // Returns processed thinking text
-  onFinish(): Promise<HandlerResult>;  // Returns messages to persist
+  onFinish(): Promise<HandlerResult>; // Returns messages to persist
 
   // Optional metadata for introspection
   getMetadata?(): HandlerMetadata;
@@ -66,7 +66,7 @@ export interface StoryHandler {
 // Constructor signature for handlers that require per-request context
 export type StoryHandlerFactory = (
   ctx: StoryContext,
-  config?: HandlerConfig
+  config?: HandlerConfig,
 ) => StoryHandler;
 
 // ======================
@@ -97,7 +97,11 @@ export function registerStoryHandler(
 
   // Validate factory implementation by creating a test instance
   try {
-    const testCtx: StoryContext = { story: 0, userId: "test", provider: "openai" };
+    const testCtx: StoryContext = {
+      story: 0,
+      userId: "test",
+      provider: "openai",
+    };
     const handler = factory(testCtx);
 
     const requiredMethods: (keyof StoryHandler)[] = [
@@ -154,7 +158,11 @@ export function getHandlerMetadata(name: string): HandlerMetadata | undefined {
 
   // Fallback: instantiate handler and check if it provides metadata
   try {
-    const testCtx: StoryContext = { story: 0, userId: "test", provider: "openai" };
+    const testCtx: StoryContext = {
+      story: 0,
+      userId: "test",
+      provider: "openai",
+    };
     const handler = entry.factory(testCtx);
     if (handler.getMetadata) {
       return handler.getMetadata();
@@ -181,4 +189,4 @@ export function listHandlersWithMetadata(): Array<{
 
 // Register built-in handlers lazily to avoid circular TDZ issues.
 void import("./simple.js");
-void import("./live.js");
+void import("./live/index.js");

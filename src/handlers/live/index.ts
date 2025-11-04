@@ -1,14 +1,14 @@
 import { z } from "zod";
-import { embedTexts } from "../llm.js";
-import { searchSimilarMemories } from "../memory.js";
-import { getMessagesByStory } from "../message.js";
+import { embedTexts } from "../../llm.js";
+import { searchSimilarMemories } from "../../memory.js";
+import { getMessagesByStory } from "../../message.js";
 import {
   registerStoryHandler,
   type HandlerConfig,
   type HandlerMetadata,
   type StoryContext,
   type StoryHandler,
-} from "./index.js";
+} from "../index.js";
 
 const clipSchema = z.object({
   body: z.string().describe("身体动作/姿势描"),
