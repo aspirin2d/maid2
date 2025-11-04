@@ -5,38 +5,13 @@ import { embedTexts } from "../../llm.js";
 import { searchSimilarMemories } from "../../memory.js";
 import { getMessagesByStory } from "../../message.js";
 import type { StoryContext, HandlerConfig } from "../index.js";
+import { extractRequestText } from "./utils.js";
 
 // Enable relative time plugin and set locale to Chinese
 const dayjs = dayJsModule;
 const relativeTime = relativeTimeModule;
 dayjs.extend(relativeTime);
 dayjs.locale("zh-cn");
-
-/**
- * Extract text content from various input formats
- */
-function extractRequestText(input: unknown): string | null {
-  if (typeof input === "string") {
-    const trimmed = input.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-  if (input && typeof input === "object") {
-    const candidate =
-      (input as Record<string, unknown>).prompt ??
-      (input as Record<string, unknown>).question ??
-      (input as Record<string, unknown>).message ??
-      (input as Record<string, unknown>).input;
-    if (typeof candidate === "string" && candidate.trim().length > 0) {
-      return candidate.trim();
-    }
-    try {
-      return JSON.stringify(input);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
 
 /**
  * Build the current time context section
@@ -70,17 +45,21 @@ function getTimeOfDay(time: Dayjs): string {
 async function buildMemoryContext(
   request: string | null,
   ctx: StoryContext,
+  config?: HandlerConfig,
 ): Promise<string> {
   if (!request || !ctx.provider) {
     return "";
   }
 
   try {
+    const topK = (config?.memoryTopK as number | undefined) ?? 5;
+    const minSimilarity = (config?.memoryMinSimilarity as number | undefined) ?? 0.5;
+
     const [queryEmbedding] = await embedTexts(ctx.provider, [request]);
     const memories = await searchSimilarMemories(queryEmbedding, {
       userId: ctx.userId,
-      topK: 5,
-      minSimilarity: 0.5,
+      topK,
+      minSimilarity,
     });
 
     if (memories.length === 0) {
@@ -479,17 +458,25 @@ function getResponseFormatSettings(): string {
 }
 
 /**
+ * Cached system prompt to avoid repeated string concatenation
+ */
+let cachedSystemPrompt: string | null = null;
+
+/**
  * Get default system prompt for VTuber
  * Combines all background settings into a complete prompt
  */
 function getDefaultSystemPrompt(): string {
-  const sections = [
-    getCharacterBasicSettings(),
-    getStreamProgramSettings(),
-    getResponseFormatSettings(),
-  ];
+  if (!cachedSystemPrompt) {
+    const sections = [
+      getCharacterBasicSettings(),
+      getStreamProgramSettings(),
+      getResponseFormatSettings(),
+    ];
+    cachedSystemPrompt = sections.join("\n\n");
+  }
 
-  return sections.join("\n\n");
+  return cachedSystemPrompt;
 }
 
 /**
@@ -511,13 +498,18 @@ export async function buildPrompt(
 
   // Retrieve and add relevant memories for context
   const request = extractRequestText(input);
-  const memoryContext = await buildMemoryContext(request, ctx);
+
+  // Parallelize independent async operations for better performance
+  const [memoryContext, chatHistory] = await Promise.all([
+    buildMemoryContext(request, ctx, config),
+    buildChatHistory(ctx, messageLimit),
+  ]);
+
   if (memoryContext) {
     prompt.push(memoryContext);
   }
 
   // Add chat history
-  const chatHistory = await buildChatHistory(ctx, messageLimit);
   prompt.push(chatHistory);
   prompt.push("");
 
