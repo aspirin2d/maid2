@@ -1,15 +1,15 @@
 import { input, password } from "@inquirer/prompts";
 
 import {
-  AUTH_BASE_URL,
-  APP_BASE_URL,
   clearSessionFile,
   fetchSession,
   writeSessionFile,
   type SessionRecord,
   type SessionUser,
 } from "./core.js";
-import { extractErrorMessage, parseJSON, safeFetch, capitalize, requiredField } from "./lib.js";
+import { extractErrorMessage, parseJSON, capitalize, requiredField } from "./lib.js";
+import { apiFetch } from "./api.js";
+import { AUTH_BASE_URL } from "./constants.js";
 
 async function handleAuth(mode: "login" | "signup") {
   const email = await input({
@@ -35,7 +35,7 @@ async function handleAuth(mode: "login" | "signup") {
       ? { name, email, password: secret }
       : { email, password: secret };
 
-  const response = await safeFetch(
+  const response = await apiFetch(
     endpoint,
     {
       method: "POST",
@@ -45,7 +45,6 @@ async function handleAuth(mode: "login" | "signup") {
       body: JSON.stringify(payload),
     },
     "auth",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -90,7 +89,7 @@ async function handleLogout(record: SessionRecord | null) {
     return;
   }
 
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/sign-out",
     {
       method: "POST",
@@ -99,7 +98,6 @@ async function handleLogout(record: SessionRecord | null) {
       },
     },
     "auth",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {

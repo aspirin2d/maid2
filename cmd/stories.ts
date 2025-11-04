@@ -3,7 +3,6 @@ import { confirm, input, select } from "@inquirer/prompts";
 import {
   extractErrorMessage,
   parseJSON,
-  safeFetch,
   readSSE,
   formatTimestamp,
   requiredField,
@@ -12,15 +11,12 @@ import {
   isPromptAbortError,
   menuPrompt,
   type MenuResult,
-  type ProviderOption,
   type StoryRecord,
   type StoryHandlerInfo,
-  APP_BASE_URL,
-  AUTH_BASE_URL,
 } from "./core.js";
 import { buildHandlerInput, formatHandlerOutput } from "./handlers.js";
-
-const PROVIDERS: ProviderOption[] = ["ollama", "openai"];
+import { apiFetch } from "./api.js";
+import { PROVIDERS, type ProviderOption } from "./constants.js";
 
 type StoryMenuResult =
   | { type: "exit" }
@@ -142,7 +138,7 @@ async function createStoryFlow(token: string) {
 }
 
 async function fetchStories(token: string): Promise<StoryRecord[]> {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/api/s",
     {
       method: "GET",
@@ -151,7 +147,6 @@ async function fetchStories(token: string): Promise<StoryRecord[]> {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -165,7 +160,7 @@ async function fetchStories(token: string): Promise<StoryRecord[]> {
 }
 
 async function deleteStoryRequest(token: string, storyId: number) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}`,
     {
       method: "DELETE",
@@ -174,7 +169,6 @@ async function deleteStoryRequest(token: string, storyId: number) {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -187,7 +181,7 @@ async function deleteStoryRequest(token: string, storyId: number) {
 }
 
 async function clearStoryMessagesRequest(token: string, storyId: number) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}/messages`,
     {
       method: "DELETE",
@@ -196,7 +190,6 @@ async function clearStoryMessagesRequest(token: string, storyId: number) {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -214,7 +207,7 @@ async function updateStoryRequest(
   storyId: number,
   name: string,
 ) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}`,
     {
       method: "PATCH",
@@ -225,7 +218,6 @@ async function updateStoryRequest(
       body: JSON.stringify({ name }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -244,7 +236,7 @@ async function createStoryRequest(
   provider: ProviderOption,
   handler: string,
 ) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/api/s",
     {
       method: "POST",
@@ -255,7 +247,6 @@ async function createStoryRequest(
       body: JSON.stringify({ name, provider, handler }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -492,7 +483,7 @@ async function streamStoryConversation({
   provider,
   input: payload,
 }: StreamArgs) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}/stream`,
     {
       method: "POST",
@@ -503,7 +494,6 @@ async function streamStoryConversation({
       body: JSON.stringify({ handler, provider, input: payload }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -616,7 +606,7 @@ async function fetchHandlers(
       ? `/api/s/${storyId}/handlers`
       : "/api/s/handlers";
 
-  const response = await safeFetch(
+  const response = await apiFetch(
     endpoint,
     {
       method: "GET",
@@ -625,7 +615,6 @@ async function fetchHandlers(
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -645,7 +634,7 @@ async function fetchHandlers(
 }
 
 async function fetchStoryDetails(token: string, storyId: number) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}`,
     {
       method: "GET",
@@ -654,7 +643,6 @@ async function fetchStoryDetails(token: string, storyId: number) {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
