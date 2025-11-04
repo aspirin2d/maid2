@@ -315,7 +315,14 @@ storiesRoute.post("/:id/stream", validateStoryId, async (c) => {
     return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
 
   // 2) Let handler render prompt and JSON Schema, and optional bypass
-  const renderData = await handler.init(parsed.data);
+  // Extract the 'input' field if present, otherwise use the entire payload
+  const handlerInput =
+    typeof parsed.data === "object" &&
+    parsed.data !== null &&
+    "input" in parsed.data
+      ? parsed.data.input
+      : parsed.data;
+  const renderData = await handler.init(handlerInput);
   if (!renderData) return c.json({ ok: true }, 200);
 
   const { prompt, schema } = renderData;
