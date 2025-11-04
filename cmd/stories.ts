@@ -3,7 +3,6 @@ import { confirm, input, select } from "@inquirer/prompts";
 import {
   extractErrorMessage,
   parseJSON,
-  safeFetch,
   readSSE,
   formatTimestamp,
   requiredField,
@@ -12,14 +11,12 @@ import {
   isPromptAbortError,
   menuPrompt,
   type MenuResult,
-  type ProviderOption,
   type StoryRecord,
   type StoryHandlerInfo,
-  APP_BASE_URL,
-  AUTH_BASE_URL,
 } from "./core.js";
-
-const PROVIDERS: ProviderOption[] = ["ollama", "openai"];
+import { buildHandlerInput, formatHandlerOutput } from "./handlers.js";
+import { apiFetch } from "./api.js";
+import { PROVIDERS, type ProviderOption } from "./constants.js";
 
 type StoryMenuResult =
   | { type: "exit" }
@@ -141,7 +138,7 @@ async function createStoryFlow(token: string) {
 }
 
 async function fetchStories(token: string): Promise<StoryRecord[]> {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/api/s",
     {
       method: "GET",
@@ -150,7 +147,6 @@ async function fetchStories(token: string): Promise<StoryRecord[]> {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -164,7 +160,7 @@ async function fetchStories(token: string): Promise<StoryRecord[]> {
 }
 
 async function deleteStoryRequest(token: string, storyId: number) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}`,
     {
       method: "DELETE",
@@ -173,7 +169,6 @@ async function deleteStoryRequest(token: string, storyId: number) {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -186,7 +181,7 @@ async function deleteStoryRequest(token: string, storyId: number) {
 }
 
 async function clearStoryMessagesRequest(token: string, storyId: number) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}/messages`,
     {
       method: "DELETE",
@@ -195,7 +190,6 @@ async function clearStoryMessagesRequest(token: string, storyId: number) {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -213,7 +207,7 @@ async function updateStoryRequest(
   storyId: number,
   name: string,
 ) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}`,
     {
       method: "PATCH",
@@ -224,7 +218,6 @@ async function updateStoryRequest(
       body: JSON.stringify({ name }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -243,7 +236,7 @@ async function createStoryRequest(
   provider: ProviderOption,
   handler: string,
 ) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/api/s",
     {
       method: "POST",
@@ -254,7 +247,6 @@ async function createStoryRequest(
       body: JSON.stringify({ name, provider, handler }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -345,11 +337,10 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
   console.log(`⚙️  Using handler "${handler}" and provider "${provider}".`);
 
   while (true) {
-    let rawMessage: string;
+    // Build handler-specific input (uses handler registry)
+    let userInput: unknown;
     try {
-      rawMessage = await input({
-        message: "You",
-      });
+      userInput = await buildHandlerInput(handler);
     } catch (error) {
       if (isPromptAbortError(error)) {
         console.log("\n👋 Leaving chat.");
@@ -358,68 +349,76 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
       throw error;
     }
 
-    const message = rawMessage;
-    if (!message) {
-      console.log("⚠️  Message cannot be empty.");
-      continue;
-    }
+    // Handle string commands
+    if (typeof userInput === "string") {
+      if (!userInput) {
+        console.log("⚠️  Message cannot be empty.");
+        continue;
+      }
 
-    const command = message.toLowerCase();
-    if (command === "/exit" || command === "/back" || command === "/quit") {
-      console.log("👋 Leaving chat.");
-      return;
-    }
+      const command = userInput.toLowerCase();
+      if (command === "/exit" || command === "/back" || command === "/quit") {
+        console.log("👋 Leaving chat.");
+        return;
+      }
 
-    if (command === "/clear") {
-      try {
-        const confirmed = await confirm({
-          message: "Are you sure you want to clear all messages from this story?",
-          default: false,
-        });
+      if (command === "/clear") {
+        try {
+          const confirmed = await confirm({
+            message: "Are you sure you want to clear all messages from this story?",
+            default: false,
+          });
 
-        if (confirmed) {
-          const deletedCount = await clearStoryMessagesRequest(token, storyRecord.id);
-          if (deletedCount !== null) {
-            console.log(`🗑️  Cleared ${deletedCount} message(s) from this story.`);
+          if (confirmed) {
+            const deletedCount = await clearStoryMessagesRequest(token, storyRecord.id);
+            if (deletedCount !== null) {
+              console.log(`🗑️  Cleared ${deletedCount} message(s) from this story.`);
+            }
+          } else {
+            console.log("❌ Clear cancelled.");
           }
-        } else {
-          console.log("❌ Clear cancelled.");
+        } catch (error) {
+          if (isPromptAbortError(error)) {
+            console.log("❌ Clear cancelled.");
+          } else {
+            throw error;
+          }
         }
-      } catch (error) {
-        if (isPromptAbortError(error)) {
-          console.log("❌ Clear cancelled.");
-        } else {
-          throw error;
+        continue;
+      }
+
+      if (command === "/handler") {
+        const next = await selectStoryHandler(token, storyRecord.id, handler);
+        if (next) {
+          handler = next;
+          console.log(`🔁 Using handler "${handler}".`);
         }
+        continue;
       }
-      continue;
+
+      if (command === "/provider") {
+        const nextProvider = await selectProvider(provider);
+        if (nextProvider) {
+          provider = nextProvider;
+          console.log(`🔁 Using provider "${provider}".`);
+        }
+        continue;
+      }
     }
 
-    if (command === "/handler") {
-      const next = await selectStoryHandler(token, storyRecord.id, handler);
-      if (next) {
-        handler = next;
-        console.log(`🔁 Using handler "${handler}".`);
-      }
-      continue;
-    }
+    // Display user input
+    const displayMessage = typeof userInput === "string"
+      ? userInput
+      : JSON.stringify(userInput, null, 2);
+    console.log(`\n🧑 You: ${displayMessage}`);
 
-    if (command === "/provider") {
-      const nextProvider = await selectProvider(provider);
-      if (nextProvider) {
-        provider = nextProvider;
-        console.log(`🔁 Using provider "${provider}".`);
-      }
-      continue;
-    }
-
-    console.log(`\n🧑 You: ${message}`);
+    // Stream the conversation
     await streamStoryConversation({
       token,
       storyId: storyRecord.id,
       handler,
       provider,
-      input: message,
+      input: userInput,
     });
   }
 }
@@ -484,7 +483,7 @@ async function streamStoryConversation({
   provider,
   input: payload,
 }: StreamArgs) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}/stream`,
     {
       method: "POST",
@@ -495,7 +494,6 @@ async function streamStoryConversation({
       body: JSON.stringify({ handler, provider, input: payload }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -608,7 +606,7 @@ async function fetchHandlers(
       ? `/api/s/${storyId}/handlers`
       : "/api/s/handlers";
 
-  const response = await safeFetch(
+  const response = await apiFetch(
     endpoint,
     {
       method: "GET",
@@ -617,7 +615,6 @@ async function fetchHandlers(
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -637,7 +634,7 @@ async function fetchHandlers(
 }
 
 async function fetchStoryDetails(token: string, storyId: number) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/s/${storyId}`,
     {
       method: "GET",
@@ -646,7 +643,6 @@ async function fetchStoryDetails(token: string, storyId: number) {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -677,19 +673,18 @@ function displayParsedResponse(handler: string, payload: string) {
   const raw = payload.trim();
   if (!raw) return;
 
+  // Try handler-specific formatting first
+  const handled = formatHandlerOutput(handler, payload);
+  if (handled) {
+    return;
+  }
+
+  // Fallback: try to parse as JSON and display prettily
   let parsed: unknown = null;
   try {
     parsed = JSON.parse(raw);
   } catch {
     parsed = null;
-  }
-
-  if (handler === "simple" && parsed && typeof parsed === "object") {
-    const message = (parsed as { response?: unknown }).response;
-    if (typeof message === "string" && message.trim().length > 0) {
-      console.log(`\n📝 Message: ${message}`);
-    }
-    return;
   }
 
   displayRawResponse(parsed ? JSON.stringify(parsed, null, 2) : raw);

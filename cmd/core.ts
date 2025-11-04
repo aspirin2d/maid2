@@ -1,6 +1,5 @@
-import path from "node:path";
-import process from "node:process";
 import fs from "node:fs/promises";
+import process from "node:process";
 import {
   createPrompt,
   isDownKey,
@@ -10,27 +9,9 @@ import {
   usePrefix,
   useState,
 } from "@inquirer/core";
-import { extractErrorMessage, parseJSON, safeFetch } from "./lib.js";
-
-// ============================================================================
-// Configuration
-// ============================================================================
-
-const SESSION_FILE = path.resolve(process.cwd(), ".session");
-
-function resolveAuthBaseURL(base: string) {
-  const trimmed = base.replace(/\/$/, "");
-  if (trimmed.endsWith("/api/auth")) {
-    return trimmed;
-  }
-  return `${trimmed}/api/auth`;
-}
-
-const AUTH_BASE_URL = resolveAuthBaseURL(
-  process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
-);
-
-const APP_BASE_URL = AUTH_BASE_URL.replace(/\/api\/auth$/, "");
+import { extractErrorMessage, parseJSON } from "./lib.js";
+import { apiFetch } from "./api.js";
+import { SESSION_FILE, AUTH_BASE_URL, APP_BASE_URL } from "./constants.js";
 
 // ============================================================================
 // Types
@@ -72,7 +53,7 @@ export type StoryRecord = {
   id: number;
   userId: string;
   name: string;
-  provider: ProviderOption;
+  provider: string;
   handler: string;
   createdAt: string;
   updatedAt: string;
@@ -81,8 +62,6 @@ export type StoryRecord = {
 export type StoryHandlerInfo = {
   name: string;
 };
-
-export type ProviderOption = "openai" | "ollama";
 
 export type CommandContext = {
   session: SessionRecord | null;
@@ -129,7 +108,7 @@ async function clearSessionFile() {
 }
 
 async function fetchSession(token: string) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/get-session",
     {
       method: "GET",
@@ -138,7 +117,6 @@ async function fetchSession(token: string) {
       },
     },
     "auth",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -284,16 +262,18 @@ function isPromptAbortError(error: unknown): error is Error {
 
 export type { Choice, MenuResult };
 export {
+  // Re-export constants for backward compatibility
   APP_BASE_URL,
   AUTH_BASE_URL,
+  SESSION_FILE,
+  // Session management
   clearSessionFile,
   executeWithSession,
   fetchSession,
   isLoggedIn,
+  readSessionFile,
+  writeSessionFile,
+  // Custom prompts
   isPromptAbortError,
   menuPrompt,
-  readSessionFile,
-  resolveAuthBaseURL,
-  SESSION_FILE,
-  writeSessionFile,
 };

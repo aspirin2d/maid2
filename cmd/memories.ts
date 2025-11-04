@@ -4,27 +4,15 @@ import { createPrompt, useKeypress } from "@inquirer/core";
 import {
   extractErrorMessage,
   parseJSON,
-  safeFetch,
   formatTimestamp,
 } from "./lib.js";
 import {
   isPromptAbortError,
   menuPrompt,
   type MenuResult,
-  APP_BASE_URL,
-  AUTH_BASE_URL,
 } from "./core.js";
-
-const MEMORY_CATEGORIES = [
-  "USER_INFO",
-  "USER_PREFERENCE",
-  "USER_GOAL",
-  "USER_RELATIONSHIP",
-  "EVENT",
-  "OTHER",
-] as const;
-
-export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+import { apiFetch } from "./api.js";
+import { MEMORY_CATEGORIES, type MemoryCategory } from "./constants.js";
 
 // Helper prompt to wait for any key press
 const waitForKeyPress = createPrompt<void, { message: string }>(
@@ -254,7 +242,7 @@ async function promptAndEditMemory(
 }
 
 async function fetchMemories(token: string): Promise<MemoryRecord[]> {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/api/mem",
     {
       method: "GET",
@@ -263,7 +251,6 @@ async function fetchMemories(token: string): Promise<MemoryRecord[]> {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -277,7 +264,7 @@ async function fetchMemories(token: string): Promise<MemoryRecord[]> {
 }
 
 async function deleteMemoryRequest(token: string, memoryId: number) {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/mem/${memoryId}`,
     {
       method: "DELETE",
@@ -286,7 +273,6 @@ async function deleteMemoryRequest(token: string, memoryId: number) {
       },
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -307,7 +293,7 @@ async function createMemoryRequest(
     confidence?: number | null;
   },
 ): Promise<MemoryRecord | null> {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/api/mem",
     {
       method: "POST",
@@ -323,7 +309,6 @@ async function createMemoryRequest(
       }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -346,7 +331,7 @@ async function updateMemoryRequest(
     confidence?: number | null;
   },
 ): Promise<MemoryRecord | null> {
-  const response = await safeFetch(
+  const response = await apiFetch(
     `/api/mem/${memoryId}`,
     {
       method: "PUT",
@@ -362,7 +347,6 @@ async function updateMemoryRequest(
       }),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
@@ -380,7 +364,7 @@ async function extractMemoriesRequest(token: string): Promise<{
   memoriesUpdated: number;
   messagesExtracted: number;
 } | null> {
-  const response = await safeFetch(
+  const response = await apiFetch(
     "/api/mem/extract",
     {
       method: "POST",
@@ -391,7 +375,6 @@ async function extractMemoriesRequest(token: string): Promise<{
       body: JSON.stringify({}),
     },
     "app",
-    { auth: AUTH_BASE_URL, app: APP_BASE_URL },
   );
 
   if (!response.ok) {
