@@ -111,12 +111,24 @@ adminRoute.patch("/users/:userId", async (c) => {
 
 adminRoute.post("/users/:userId/role", async (c) => {
   const userId = c.req.param("userId");
+  const currentUser = c.get("user")!;
   const body = await c.req.json();
 
   const parsed = setRoleSchema.safeParse({ userId, role: body.role });
 
   if (!parsed.success) {
     return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  // Prevent self-demotion from admin role
+  if (userId === currentUser.id) {
+    const newRole = Array.isArray(body.role) ? body.role[0] : body.role;
+    if (currentUser.role === "admin" && newRole !== "admin") {
+      return c.json(
+        { error: "Cannot change your own admin role. Please ask another admin." },
+        400,
+      );
+    }
   }
 
   try {
@@ -254,7 +266,7 @@ adminRoute.post("/users/:userId/unban", async (c) => {
 // Session Management Routes
 // ============================================================================
 
-adminRoute.post("/users/:userId/sessions/list", async (c) => {
+adminRoute.get("/users/:userId/sessions", async (c) => {
   const userId = c.req.param("userId");
 
   try {
@@ -363,8 +375,35 @@ adminRoute.post("/impersonate/stop", async (c) => {
 // ============================================================================
 // API Key Management Routes
 // ============================================================================
+// Note: API keys are scoped to the current admin user for security.
+// Admins can only create, view, update, and delete their own API keys.
+// This prevents privilege escalation and unauthorized access to other users' keys.
+
+/**
+ * Helper function to verify API key ownership
+ * @throws Error if key doesn't belong to current user
+ */
+async function verifyApiKeyOwnership(c: any, keyId: string) {
+  const currentUser = c.get("user")!;
+
+  try {
+    const key = await auth.api.getApiKey({
+      query: { id: keyId },
+      headers: c.req.raw.headers,
+    });
+
+    if (key.userId !== currentUser.id) {
+      throw new Error("API key not found or access denied");
+    }
+
+    return key;
+  } catch (error) {
+    throw new Error("API key not found or access denied");
+  }
+}
 
 adminRoute.post("/api-keys", async (c) => {
+  const currentUser = c.get("user")!;
   const body = await c.req.json();
   const parsed = createApiKeySchema.safeParse(body);
 
@@ -373,8 +412,9 @@ adminRoute.post("/api-keys", async (c) => {
   }
 
   try {
+    // Create API key for current user only
     const result = await auth.api.createApiKey({
-      body: parsed.data,
+      body: { ...parsed.data, userId: currentUser.id },
       headers: c.req.raw.headers,
     });
 
@@ -388,17 +428,13 @@ adminRoute.post("/api-keys", async (c) => {
   }
 });
 
-adminRoute.get("/api-keys/user/:userId", async (c) => {
-  const userId = c.req.param("userId");
-  const parsed = listApiKeysSchema.safeParse({ userId });
-
-  if (!parsed.success) {
-    return c.json({ error: formatZodError(parsed.error) }, 400);
-  }
+adminRoute.get("/api-keys", async (c) => {
+  const currentUser = c.get("user")!;
 
   try {
+    // List API keys for current user only
     const result = await auth.api.listApiKeys({
-      query: { userId },
+      query: { userId: currentUser.id },
       headers: c.req.raw.headers,
     });
 
@@ -421,17 +457,14 @@ adminRoute.get("/api-keys/:keyId", async (c) => {
   }
 
   try {
-    const result = await auth.api.getApiKey({
-      query: { id: keyId },
-      headers: c.req.raw.headers,
-    });
-
+    // Verify ownership and get the key
+    const result = await verifyApiKeyOwnership(c, keyId);
     return c.json({ apiKey: result });
   } catch (error) {
     console.error("Failed to get API key", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Failed to get API key" },
-      500,
+      404,
     );
   }
 });
@@ -447,6 +480,9 @@ adminRoute.patch("/api-keys/:keyId", async (c) => {
   }
 
   try {
+    // Verify ownership before updating
+    await verifyApiKeyOwnership(c, keyId);
+
     const result = await auth.api.updateApiKey({
       body: parsed.data,
       headers: c.req.raw.headers,
@@ -457,7 +493,7 @@ adminRoute.patch("/api-keys/:keyId", async (c) => {
     console.error("Failed to update API key", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Failed to update API key" },
-      500,
+      404,
     );
   }
 });
@@ -471,6 +507,9 @@ adminRoute.delete("/api-keys/:keyId", async (c) => {
   }
 
   try {
+    // Verify ownership before deleting
+    await verifyApiKeyOwnership(c, keyId);
+
     await auth.api.deleteApiKey({
       body: { keyId },
       headers: c.req.raw.headers,
@@ -481,7 +520,7 @@ adminRoute.delete("/api-keys/:keyId", async (c) => {
     console.error("Failed to delete API key", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Failed to delete API key" },
-      500,
+      404,
     );
   }
 });

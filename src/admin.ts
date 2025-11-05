@@ -202,8 +202,8 @@ export const impersonateUserSchema = z.strictObject({
 
 // Schema for creating API key - based on Better Auth API and apikey table structure
 // Types reference the apikey table structure for consistency
+// Note: userId is not in the schema as it comes from the authenticated session
 export const createApiKeySchema = z.strictObject({
-  userId: z.string().min(1, "User ID is required"),
   name: z.string().optional(),
   expiresIn: z.coerce.number().int().positive().optional(),
   prefix: z.string().optional(),

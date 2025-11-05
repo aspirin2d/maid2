@@ -20,12 +20,8 @@ import {
 } from "./memories.js";
 import {
   browseUsers,
-  listUsersCommand,
-  createUserCommand,
-  viewUserCommand,
-  setUserRoleCommand,
-  banUserCommand,
-  unbanUserCommand,
+  handleUserCommand,
+  handleApiKeyCommand,
 } from "./admin.js";
 import {
   APP_BASE_URL,
@@ -273,73 +269,27 @@ const COMMANDS: CommandDefinition[] = [
     },
     subcommands: [
       {
-        name: "users",
-        description: "List all users",
-        aliases: ["list"],
+        name: "user",
+        description: "Manage users",
+        usage: "<list|create|view|role|ban|unban>",
+        aliases: ["users"],
         handler: async (context) => {
           await withSession(
             context,
-            "No active session. Log in before listing users.",
-            (token, _session) => listUsersCommand(token),
+            "No active session. Log in before managing users.",
+            (token, session) => handleUserCommand(token, session.user?.id ?? null, context.args),
           );
         },
       },
       {
-        name: "create",
-        description: "Create a new user",
+        name: "key",
+        description: "Manage API keys",
+        usage: "<list|view|create|delete|toggle>",
         handler: async (context) => {
           await withSession(
             context,
-            "No active session. Log in before creating users.",
-            (token, _session) => createUserCommand(token),
-          );
-        },
-      },
-      {
-        name: "view",
-        description: "View user details",
-        usage: "<email>",
-        handler: async (context) => {
-          await withSession(
-            context,
-            "No active session. Log in before viewing users.",
-            (token, _session) => viewUserCommand(token, context.args),
-          );
-        },
-      },
-      {
-        name: "role",
-        description: "Set user role",
-        usage: "<email> <role>",
-        handler: async (context) => {
-          await withSession(
-            context,
-            "No active session. Log in before setting user roles.",
-            (token, _session) => setUserRoleCommand(token, context.args),
-          );
-        },
-      },
-      {
-        name: "ban",
-        description: "Ban a user",
-        usage: "<email> [reason]",
-        handler: async (context) => {
-          await withSession(
-            context,
-            "No active session. Log in before banning users.",
-            (token, session) => banUserCommand(token, context.args, session.user?.id ?? null),
-          );
-        },
-      },
-      {
-        name: "unban",
-        description: "Unban a user",
-        usage: "<email>",
-        handler: async (context) => {
-          await withSession(
-            context,
-            "No active session. Log in before unbanning users.",
-            (token, _session) => unbanUserCommand(token, context.args),
+            "No active session. Log in before managing API keys.",
+            (token, session) => handleApiKeyCommand(token, session.user!.email, context.args),
           );
         },
       },
