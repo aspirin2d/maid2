@@ -34,6 +34,30 @@ export type AdminSession = {
   userAgent: string | null;
 };
 
+export type AdminApiKey = {
+  id: string;
+  name: string | null;
+  start: string | null;
+  prefix: string | null;
+  key: string;
+  userId: string;
+  refillInterval: number | null;
+  refillAmount: number | null;
+  lastRefillAt: string | null;
+  enabled: boolean | null;
+  rateLimitEnabled: boolean | null;
+  rateLimitTimeWindow: number | null;
+  rateLimitMax: number | null;
+  requestCount: number | null;
+  remaining: number | null;
+  lastRequest: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  permissions: string | null;
+  metadata: string | null;
+};
+
 type UserMenuResult =
   | { type: "exit" }
   | { type: "view"; user: AdminUser }
@@ -765,6 +789,141 @@ async function revokeAllUserSessionsRequest(
 }
 
 // ============================================================================
+// API Key Management API Requests
+// ============================================================================
+
+async function fetchUserApiKeys(token: string, userId: string): Promise<AdminApiKey[]> {
+  const response = await apiFetch(
+    `/api/admin/api-keys/user/${userId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to fetch API keys: ${message}`);
+    return [];
+  }
+
+  const data = await parseJSON<{ apiKeys: AdminApiKey[] }>(response);
+  return data?.apiKeys || [];
+}
+
+async function createApiKeyRequest(
+  token: string,
+  payload: {
+    userId: string;
+    name?: string;
+    expiresIn?: number;
+    prefix?: string;
+  },
+): Promise<AdminApiKey | null> {
+  const response = await apiFetch(
+    "/api/admin/api-keys",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to create API key: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ apiKey: AdminApiKey }>(response);
+  return data?.apiKey || null;
+}
+
+async function getApiKeyRequest(token: string, keyId: string): Promise<AdminApiKey | null> {
+  const response = await apiFetch(
+    `/api/admin/api-keys/${keyId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to get API key: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ apiKey: AdminApiKey }>(response);
+  return data?.apiKey || null;
+}
+
+async function updateApiKeyRequest(
+  token: string,
+  keyId: string,
+  update: {
+    name?: string;
+    enabled?: boolean;
+    remaining?: number;
+    refillInterval?: number;
+    refillAmount?: number;
+  },
+): Promise<AdminApiKey | null> {
+  const response = await apiFetch(
+    `/api/admin/api-keys/${keyId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(update),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to update API key: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ apiKey: AdminApiKey }>(response);
+  return data?.apiKey || null;
+}
+
+async function deleteApiKeyRequest(token: string, keyId: string): Promise<boolean> {
+  const response = await apiFetch(
+    `/api/admin/api-keys/${keyId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to delete API key: ${message}`);
+    return false;
+  }
+
+  return true;
+}
+
+// ============================================================================
 // Command Exports
 // ============================================================================
 
@@ -878,5 +1037,216 @@ export async function unbanUserCommand(token: string, args: string[]) {
   const result = await unbanUserRequest(token, user.id);
   if (result) {
     console.log(`User ${email} has been unbanned.`);
+  }
+}
+
+// ============================================================================
+// API Key Management Commands
+// ============================================================================
+
+export async function listApiKeysCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin apikey list <email>");
+    return;
+  }
+
+  const email = args[0];
+  const users = await fetchUsers(token);
+  const user = users.find((u) => u.email === email);
+
+  if (!user) {
+    console.log(`User with email "${email}" not found.`);
+    return;
+  }
+
+  const apiKeys = await fetchUserApiKeys(token, user.id);
+
+  if (apiKeys.length === 0) {
+    console.log(`No API keys found for user ${email}.`);
+    return;
+  }
+
+  console.log(`\n=== API Keys for ${email} ===`);
+  apiKeys.forEach((key) => {
+    const status = key.enabled ? "enabled" : "disabled";
+    const name = key.name || "(no name)";
+    const expires = key.expiresAt ? ` - Expires: ${formatTimestamp(key.expiresAt)}` : "";
+    console.log(`${key.id} - ${name} [${status}]${expires}`);
+  });
+  console.log("");
+}
+
+export async function viewApiKeyCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin apikey view <keyId>");
+    return;
+  }
+
+  const keyId = args[0];
+  const apiKey = await getApiKeyRequest(token, keyId);
+
+  if (!apiKey) {
+    console.log(`API key with ID "${keyId}" not found.`);
+    return;
+  }
+
+  console.log("\n=== API Key Details ===");
+  console.log(`ID: ${apiKey.id}`);
+  console.log(`Name: ${apiKey.name || "(no name)"}`);
+  console.log(`User ID: ${apiKey.userId}`);
+  console.log(`Enabled: ${apiKey.enabled ? "Yes" : "No"}`);
+  console.log(`Key: ${apiKey.key}`);
+  console.log(`Prefix: ${apiKey.prefix || "N/A"}`);
+  console.log(`Start: ${apiKey.start || "N/A"}`);
+
+  if (apiKey.rateLimitEnabled) {
+    console.log(`Rate Limit: ${apiKey.rateLimitMax} requests per ${apiKey.rateLimitTimeWindow}ms`);
+    console.log(`Request Count: ${apiKey.requestCount}`);
+  }
+
+  if (apiKey.remaining !== null) {
+    console.log(`Remaining: ${apiKey.remaining}`);
+  }
+
+  if (apiKey.refillInterval && apiKey.refillAmount) {
+    console.log(`Refill: ${apiKey.refillAmount} every ${apiKey.refillInterval}ms`);
+  }
+
+  if (apiKey.lastRefillAt) {
+    console.log(`Last Refill: ${formatTimestamp(apiKey.lastRefillAt)}`);
+  }
+
+  if (apiKey.lastRequest) {
+    console.log(`Last Request: ${formatTimestamp(apiKey.lastRequest)}`);
+  }
+
+  if (apiKey.expiresAt) {
+    console.log(`Expires: ${formatTimestamp(apiKey.expiresAt)}`);
+  }
+
+  console.log(`Created: ${formatTimestamp(apiKey.createdAt)}`);
+  console.log(`Updated: ${formatTimestamp(apiKey.updatedAt)}`);
+
+  if (apiKey.permissions) {
+    console.log(`Permissions: ${apiKey.permissions}`);
+  }
+
+  if (apiKey.metadata) {
+    console.log(`Metadata: ${apiKey.metadata}`);
+  }
+
+  console.log("");
+}
+
+export async function createApiKeyCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin apikey create <email> [name]");
+    return;
+  }
+
+  const [email, ...nameParts] = args;
+  const users = await fetchUsers(token);
+  const user = users.find((u) => u.email === email);
+
+  if (!user) {
+    console.log(`User with email "${email}" not found.`);
+    return;
+  }
+
+  try {
+    const name = nameParts.length > 0 ? nameParts.join(" ") : undefined;
+
+    const confirmed = await confirm({
+      message: `Create API key for user "${email}"?`,
+      default: true,
+    });
+
+    if (!confirmed) {
+      console.log("API key creation cancelled.");
+      return;
+    }
+
+    const apiKey = await createApiKeyRequest(token, {
+      userId: user.id,
+      name,
+    });
+
+    if (apiKey) {
+      console.log(`\nAPI key created successfully!`);
+      console.log(`ID: ${apiKey.id}`);
+      console.log(`Key: ${apiKey.key}`);
+      console.log(`Name: ${apiKey.name || "(no name)"}`);
+      console.log("\nIMPORTANT: Save this key now. You won't be able to see it again!");
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("API key creation cancelled.");
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function deleteApiKeyCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin apikey delete <keyId>");
+    return;
+  }
+
+  const keyId = args[0];
+  const apiKey = await getApiKeyRequest(token, keyId);
+
+  if (!apiKey) {
+    console.log(`API key with ID "${keyId}" not found.`);
+    return;
+  }
+
+  try {
+    const confirmed = await confirm({
+      message: `Delete API key "${apiKey.name || keyId}"? This action cannot be undone.`,
+      default: false,
+    });
+
+    if (!confirmed) {
+      console.log("API key deletion cancelled.");
+      return;
+    }
+
+    const deleted = await deleteApiKeyRequest(token, keyId);
+    if (deleted) {
+      console.log(`API key ${keyId} deleted successfully.`);
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("API key deletion cancelled.");
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function toggleApiKeyCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin apikey toggle <keyId>");
+    return;
+  }
+
+  const keyId = args[0];
+  const apiKey = await getApiKeyRequest(token, keyId);
+
+  if (!apiKey) {
+    console.log(`API key with ID "${keyId}" not found.`);
+    return;
+  }
+
+  const newStatus = !apiKey.enabled;
+  const result = await updateApiKeyRequest(token, keyId, {
+    enabled: newStatus,
+  });
+
+  if (result) {
+    console.log(
+      `API key ${keyId} ${newStatus ? "enabled" : "disabled"} successfully.`,
+    );
   }
 }

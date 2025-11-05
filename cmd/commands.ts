@@ -26,6 +26,11 @@ import {
   setUserRoleCommand,
   banUserCommand,
   unbanUserCommand,
+  listApiKeysCommand,
+  viewApiKeyCommand,
+  createApiKeyCommand,
+  deleteApiKeyCommand,
+  toggleApiKeyCommand,
 } from "./admin.js";
 import {
   APP_BASE_URL,
@@ -340,6 +345,66 @@ const COMMANDS: CommandDefinition[] = [
             context,
             "No active session. Log in before unbanning users.",
             (token, _session) => unbanUserCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "apikey-list",
+        description: "List API keys for a user",
+        usage: "<email>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before listing API keys.",
+            (token, _session) => listApiKeysCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "apikey-view",
+        description: "View API key details",
+        usage: "<keyId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before viewing API keys.",
+            (token, _session) => viewApiKeyCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "apikey-create",
+        description: "Create an API key for a user",
+        usage: "<email> [name]",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before creating API keys.",
+            (token, _session) => createApiKeyCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "apikey-delete",
+        description: "Delete an API key",
+        usage: "<keyId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before deleting API keys.",
+            (token, _session) => deleteApiKeyCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "apikey-toggle",
+        description: "Enable or disable an API key",
+        usage: "<keyId>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before toggling API keys.",
+            (token, _session) => toggleApiKeyCommand(token, context.args),
           );
         },
       },
