@@ -82,7 +82,7 @@ async function fetchSession(token: string) {
 
 async function executeWithSession(
   sessionRecord: SessionRecord | null,
-  action: (token: string) => Promise<CommandResult | void>,
+  action: (token: string, session: SessionRecord) => Promise<CommandResult | void>,
   options?: { missingSessionMessage?: string },
 ) {
   if (!sessionRecord?.token) {
@@ -93,7 +93,7 @@ async function executeWithSession(
     return;
   }
 
-  return action(sessionRecord.token);
+  return action(sessionRecord.token, sessionRecord);
 }
 
 // ============================================================================

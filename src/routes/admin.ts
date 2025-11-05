@@ -31,11 +31,16 @@ adminRoute.use("/*", requireAdmin);
 // User Management Routes
 // ============================================================================
 
+const roleInputSchema = z.union([
+  z.string().min(1, "Role must be a non-empty string"),
+  z.array(z.string().min(1, "Role entries must be non-empty")).min(1, "Provide at least one role"),
+]);
+
 const createUserSchema = z.strictObject({
   email: z.string().email("Valid email is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   name: z.string().min(1, "Name is required"),
-  role: z.enum(["user", "admin"]).optional(),
+  role: roleInputSchema.optional(),
   data: z.record(z.string(), z.any()).optional(),
 });
 
@@ -48,8 +53,11 @@ adminRoute.post("/users", async (c) => {
   }
 
   try {
+    const payload = parsed.data as typeof parsed.data & {
+      role?: string | string[];
+    };
     const result = await auth.api.createUser({
-      body: parsed.data,
+      body: payload as any,
       headers: c.req.raw.headers,
     });
 
@@ -72,7 +80,9 @@ const listUsersSchema = z.object({
   sortBy: z.string().optional(),
   sortDirection: z.enum(["asc", "desc"]).optional(),
   filterField: z.string().optional(),
-  filterValue: z.string().optional(),
+  filterValue: z
+    .union([z.string(), z.coerce.number(), z.enum(["true", "false"]).transform((v) => v === "true")])
+    .optional(),
   filterOperator: z.enum(["eq", "ne", "gt", "lt", "gte", "lte", "contains"]).optional(),
 });
 
@@ -100,24 +110,35 @@ adminRoute.get("/users", async (c) => {
   }
 });
 
-const updateUserSchema = z.strictObject({
-  userId: z.string().min(1, "User ID is required"),
-  update: z.record(z.string(), z.any()),
-});
+const updateUserSchema = z
+  .strictObject({
+    userId: z.string().min(1, "User ID is required"),
+    data: z.record(z.string(), z.any()),
+  })
+  .superRefine((value, ctx) => {
+    if (Object.keys(value.data).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one field is required to update the user",
+        path: ["data"],
+      });
+    }
+  });
 
 adminRoute.patch("/users/:userId", async (c) => {
   const userId = c.req.param("userId");
   const body = await c.req.json();
 
-  const parsed = updateUserSchema.safeParse({ userId, update: body });
+  const parsed = updateUserSchema.safeParse({ userId, data: body });
 
   if (!parsed.success) {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
   try {
-    const result = await auth.api.updateUser({
-      body: parsed.data,
+    const { userId: targetUserId, data } = parsed.data;
+    const result = await auth.api.adminUpdateUser({
+      body: { userId: targetUserId, data },
       headers: c.req.raw.headers,
     });
 
@@ -133,7 +154,7 @@ adminRoute.patch("/users/:userId", async (c) => {
 
 const setRoleSchema = z.strictObject({
   userId: z.string().min(1, "User ID is required"),
-  role: z.union([z.enum(["user", "admin"]), z.array(z.enum(["user", "admin"]))]),
+  role: roleInputSchema,
 });
 
 adminRoute.post("/users/:userId/role", async (c) => {
@@ -147,8 +168,11 @@ adminRoute.post("/users/:userId/role", async (c) => {
   }
 
   try {
+    const payload = parsed.data as typeof parsed.data & {
+      role: string | string[];
+    };
     const result = await auth.api.setRole({
-      body: parsed.data,
+      body: payload as any,
       headers: c.req.raw.headers,
     });
 
@@ -208,6 +232,7 @@ adminRoute.delete("/users/:userId", async (c) => {
   try {
     await auth.api.removeUser({
       body: { userId },
+      headers: c.req.raw.headers,
     });
 
     return c.json({ success: true });
@@ -227,7 +252,7 @@ adminRoute.delete("/users/:userId", async (c) => {
 const banUserSchema = z.strictObject({
   userId: z.string().min(1, "User ID is required"),
   banReason: z.string().optional(),
-  banExpiresIn: z.number().positive().optional(),
+  banExpiresIn: z.coerce.number().int().positive().optional(),
 });
 
 adminRoute.post("/users/:userId/ban", async (c) => {
@@ -288,7 +313,7 @@ adminRoute.post("/users/:userId/unban", async (c) => {
 // Session Management Routes
 // ============================================================================
 
-adminRoute.get("/users/:userId/sessions", async (c) => {
+adminRoute.post("/users/:userId/sessions/list", async (c) => {
   const userId = c.req.param("userId");
 
   try {
@@ -307,12 +332,21 @@ adminRoute.get("/users/:userId/sessions", async (c) => {
   }
 });
 
-adminRoute.delete("/users/:userId/sessions/:sessionId", async (c) => {
-  const sessionToken = c.req.param("sessionId");
+const revokeSessionSchema = z.strictObject({
+  sessionToken: z.string().min(1, "Session token is required"),
+});
+
+adminRoute.post("/users/:userId/sessions/revoke", async (c) => {
+  const body = await c.req.json();
+  const parsed = revokeSessionSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
 
   try {
     await auth.api.revokeUserSession({
-      body: { sessionToken },
+      body: parsed.data,
       headers: c.req.raw.headers,
     });
 
@@ -326,7 +360,7 @@ adminRoute.delete("/users/:userId/sessions/:sessionId", async (c) => {
   }
 });
 
-adminRoute.delete("/users/:userId/sessions", async (c) => {
+adminRoute.post("/users/:userId/sessions/revoke-all", async (c) => {
   const userId = c.req.param("userId");
 
   try {

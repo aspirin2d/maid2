@@ -49,7 +49,7 @@ type ResolvedCommand = {
 function withSession(
   context: CommandContext,
   missingSessionMessage: string,
-  action: (token: string) => Promise<CommandResult | void>,
+  action: (token: string, session: SessionRecord) => Promise<CommandResult | void>,
 ) {
   return executeWithSession(context.session, action, {
     missingSessionMessage,
@@ -89,7 +89,7 @@ const COMMANDS: CommandDefinition[] = [
       await withSession(
         context,
         "No active session. Log in before managing stories.",
-        (token) => browseStories(token),
+        (token, _session) => browseStories(token),
       );
     },
     subcommands: [
@@ -100,7 +100,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before listing stories.",
-            (token) => listStoriesCommand(token),
+            (token, _session) => listStoriesCommand(token),
           );
         },
       },
@@ -111,7 +111,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before creating stories.",
-            (token) => createStoryCommand(token),
+            (token, _session) => createStoryCommand(token),
           );
         },
       },
@@ -123,7 +123,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before chatting with stories.",
-            (token) => chatStoryCommand(token, context.args),
+            (token, _session) => chatStoryCommand(token, context.args),
           );
         },
       },
@@ -135,7 +135,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before renaming stories.",
-            (token) => renameStoryCommand(token, context.args),
+            (token, _session) => renameStoryCommand(token, context.args),
           );
         },
       },
@@ -147,7 +147,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before deleting stories.",
-            (token) => deleteStoryCommand(token, context.args),
+            (token, _session) => deleteStoryCommand(token, context.args),
           );
         },
       },
@@ -159,7 +159,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before clearing story messages.",
-            (token) => clearStoryMessagesCommand(token, context.args),
+            (token, _session) => clearStoryMessagesCommand(token, context.args),
           );
         },
       },
@@ -171,7 +171,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before listing handlers.",
-            (token) => listStoryHandlersCommand(token, context.args),
+            (token, _session) => listStoryHandlersCommand(token, context.args),
           );
         },
       },
@@ -185,7 +185,7 @@ const COMMANDS: CommandDefinition[] = [
       await withSession(
         context,
         "No active session. Log in before managing memories.",
-        (token) => browseMemories(token),
+        (token, _session) => browseMemories(token),
       );
     },
     subcommands: [
@@ -196,7 +196,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before listing memories.",
-            (token) => listMemoriesCommand(token),
+            (token, _session) => listMemoriesCommand(token),
           );
         },
       },
@@ -208,7 +208,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before viewing memories.",
-            (token) => viewMemoryCommand(token, context.args),
+            (token, _session) => viewMemoryCommand(token, context.args),
           );
         },
       },
@@ -219,7 +219,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before creating memories.",
-            (token) => createMemoryCommand(token),
+            (token, _session) => createMemoryCommand(token),
           );
         },
       },
@@ -231,7 +231,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before editing memories.",
-            (token) => editMemoryCommand(token, context.args),
+            (token, _session) => editMemoryCommand(token, context.args),
           );
         },
       },
@@ -243,7 +243,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before deleting memories.",
-            (token) => deleteMemoryCommand(token, context.args),
+            (token, _session) => deleteMemoryCommand(token, context.args),
           );
         },
       },
@@ -254,7 +254,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before extracting memories.",
-            (token) => extractMemoriesCommand(token),
+            (token, _session) => extractMemoriesCommand(token),
           );
         },
       },
@@ -268,7 +268,7 @@ const COMMANDS: CommandDefinition[] = [
       await withSession(
         context,
         "No active session. Log in before accessing admin panel.",
-        (token) => browseUsers(token),
+        (token, session) => browseUsers(token, session.user?.id ?? null),
       );
     },
     subcommands: [
@@ -280,7 +280,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before listing users.",
-            (token) => listUsersCommand(token),
+            (token, _session) => listUsersCommand(token),
           );
         },
       },
@@ -291,7 +291,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before creating users.",
-            (token) => createUserCommand(token),
+            (token, _session) => createUserCommand(token),
           );
         },
       },
@@ -303,7 +303,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before viewing users.",
-            (token) => viewUserCommand(token, context.args),
+            (token, _session) => viewUserCommand(token, context.args),
           );
         },
       },
@@ -315,7 +315,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before setting user roles.",
-            (token) => setUserRoleCommand(token, context.args),
+            (token, _session) => setUserRoleCommand(token, context.args),
           );
         },
       },
@@ -327,7 +327,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before banning users.",
-            (token) => banUserCommand(token, context.args),
+            (token, session) => banUserCommand(token, context.args, session.user?.id ?? null),
           );
         },
       },
@@ -339,7 +339,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before unbanning users.",
-            (token) => unbanUserCommand(token, context.args),
+            (token, _session) => unbanUserCommand(token, context.args),
           );
         },
       },

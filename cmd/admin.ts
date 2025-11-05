@@ -49,7 +49,7 @@ type UserMenuResult =
 // User Management
 // ============================================================================
 
-export async function browseUsers(token: string) {
+export async function browseUsers(token: string, currentUserId?: string | null) {
   while (true) {
     const users = await fetchUsers(token);
     if (users.length === 0) {
@@ -82,11 +82,15 @@ export async function browseUsers(token: string) {
     }
 
     if (action.type === "edit") {
-      await editUserFlow(token, action.user);
+      await editUserFlow(token, action.user, currentUserId ?? undefined);
       continue;
     }
 
     if (action.type === "delete") {
+      if (currentUserId && action.user.id === currentUserId) {
+        console.log("Cannot delete your own account. Please ask another admin.");
+        continue;
+      }
       const confirmed = await confirm({
         message: `Delete user "${action.user.email}"? This action cannot be undone.`,
         default: false,
@@ -103,7 +107,11 @@ export async function browseUsers(token: string) {
     }
 
     if (action.type === "ban") {
-      await banUserFlow(token, action.user);
+      if (currentUserId && action.user.id === currentUserId) {
+        console.log("Cannot ban your own account. Please ask another admin.");
+        continue;
+      }
+      await banUserFlow(token, action.user, currentUserId ?? undefined);
       continue;
     }
 
@@ -241,16 +249,31 @@ async function createUserFlow(token: string) {
   }
 }
 
-async function editUserFlow(token: string, user: AdminUser) {
+async function editUserFlow(token: string, user: AdminUser, currentUserId?: string) {
   try {
+    const isSelf = Boolean(currentUserId && user.id === currentUserId);
+    const banDisabledReason = isSelf ? "Cannot ban your own account" : undefined;
+    const unbanDisabledReason = !user.banned
+      ? "User is not banned"
+      : isSelf
+        ? "Cannot unban your own account"
+        : undefined;
     const action = await select({
       message: `Edit user "${user.email}"`,
       choices: [
         { name: "Change name", value: "name" },
         { name: "Change role", value: "role" },
         { name: "Change password", value: "password" },
-        { name: "Ban user", value: "ban" },
-        { name: "Unban user", value: "unban", disabled: !user.banned },
+        {
+          name: "Ban user",
+          value: "ban",
+          disabled: banDisabledReason,
+        },
+        {
+          name: "Unban user",
+          value: "unban",
+          disabled: unbanDisabledReason,
+        },
         { name: "Cancel", value: "cancel" },
       ],
     });
@@ -294,7 +317,7 @@ async function editUserFlow(token: string, user: AdminUser) {
         console.log("Password updated successfully.");
       }
     } else if (action === "ban") {
-      await banUserFlow(token, user);
+      await banUserFlow(token, user, currentUserId);
     } else if (action === "unban") {
       const result = await unbanUserRequest(token, user.id);
       if (result) {
@@ -339,8 +362,12 @@ async function setRoleFlow(token: string, user: AdminUser) {
   }
 }
 
-async function banUserFlow(token: string, user: AdminUser) {
+async function banUserFlow(token: string, user: AdminUser, currentUserId?: string) {
   try {
+    if (currentUserId && user.id === currentUserId) {
+      console.log("Cannot ban your own account. Please ask another admin.");
+      return;
+    }
     const reason = await input({
       message: "Ban reason (optional)",
       default: "",
@@ -387,7 +414,7 @@ async function manageUserSessionsFlow(token: string, user: AdminUser) {
     console.log(`\nActive sessions for ${user.email}:`);
     sessions.forEach((s, i) => {
       console.log(
-        `${i + 1}. Session ${s.id.substring(0, 8)}... - Created: ${formatTimestamp(s.createdAt)}`,
+        `${i + 1}. Token ${s.token.substring(0, 12)}... - Created: ${formatTimestamp(s.createdAt)}`,
       );
     });
 
@@ -419,15 +446,15 @@ async function manageUserSessionsFlow(token: string, user: AdminUser) {
         console.log("All sessions revoked successfully.");
       }
     } else if (action === "one") {
-      const sessionId = await select({
+      const sessionToken = await select({
         message: "Select session to revoke",
         choices: sessions.map((s) => ({
-          name: `${s.id.substring(0, 16)}... - ${formatTimestamp(s.createdAt)}`,
-          value: s.id,
+          name: `${s.token.substring(0, 16)}... - ${formatTimestamp(s.createdAt)}`,
+          value: s.token,
         })),
       });
 
-      const result = await revokeUserSessionRequest(token, user.id, sessionId);
+      const result = await revokeUserSessionRequest(token, user.id, sessionToken);
       if (result) {
         console.log("Session revoked successfully.");
       }
@@ -661,12 +688,14 @@ async function listUserSessionsRequest(
   userId: string,
 ): Promise<AdminSession[]> {
   const response = await apiFetch(
-    `/api/admin/users/${userId}/sessions`,
+    `/api/admin/users/${userId}/sessions/list`,
     {
-      method: "GET",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({}),
     },
     "app",
   );
@@ -684,15 +713,17 @@ async function listUserSessionsRequest(
 async function revokeUserSessionRequest(
   token: string,
   userId: string,
-  sessionId: string,
+  sessionToken: string,
 ): Promise<boolean> {
   const response = await apiFetch(
-    `/api/admin/users/${userId}/sessions/${sessionId}`,
+    `/api/admin/users/${userId}/sessions/revoke`,
     {
-      method: "DELETE",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ sessionToken }),
     },
     "app",
   );
@@ -711,12 +742,14 @@ async function revokeAllUserSessionsRequest(
   userId: string,
 ): Promise<boolean> {
   const response = await apiFetch(
-    `/api/admin/users/${userId}/sessions`,
+    `/api/admin/users/${userId}/sessions/revoke-all`,
     {
-      method: "DELETE",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({}),
     },
     "app",
   );
@@ -792,7 +825,11 @@ export async function setUserRoleCommand(token: string, args: string[]) {
   }
 }
 
-export async function banUserCommand(token: string, args: string[]) {
+export async function banUserCommand(
+  token: string,
+  args: string[],
+  currentUserId?: string | null,
+) {
   if (args.length === 0) {
     console.log("Usage: /admin user ban <email> [reason]");
     return;
@@ -804,6 +841,11 @@ export async function banUserCommand(token: string, args: string[]) {
 
   if (!user) {
     console.log(`User with email "${email}" not found.`);
+    return;
+  }
+
+  if (currentUserId && user.id === currentUserId) {
+    console.log("Cannot ban your own account. Please ask another admin.");
     return;
   }
 
