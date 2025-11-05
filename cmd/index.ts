@@ -25,24 +25,34 @@ async function main() {
       const choice = await search({
         message: "Enter a command:",
         source: async (term) => {
-          // If no search term, show all available commands
-          if (!term) {
-            return availableInputs.map((cmd) => ({
-              name: cmd,
-              value: cmd,
-            }));
+          const normalizedTerm = (term ?? "").trim();
+          const results: { name: string; value: string }[] = [];
+
+          if (normalizedTerm) {
+            const exactMatch = availableInputs.includes(normalizedTerm);
+            results.push({
+              name: exactMatch ? normalizedTerm : `Run "${normalizedTerm}"`,
+              value: normalizedTerm,
+            });
           }
 
-          // Filter commands based on search term
-          const normalizedTerm = term.toLowerCase();
-          const filtered = availableInputs.filter((cmd) =>
-            cmd.toLowerCase().includes(normalizedTerm)
-          );
+          const searchTerm = normalizedTerm.toLowerCase();
+          const filtered = searchTerm
+            ? availableInputs.filter((cmd) =>
+                cmd.toLowerCase().includes(searchTerm),
+              )
+            : availableInputs;
 
-          return filtered.map((cmd) => ({
-            name: cmd,
-            value: cmd,
-          }));
+          for (const cmd of filtered) {
+            if (!normalizedTerm || cmd !== normalizedTerm) {
+              results.push({
+                name: cmd,
+                value: cmd,
+              });
+            }
+          }
+
+          return results;
         },
         validate: (value) => {
           if (!value?.trim()) {
