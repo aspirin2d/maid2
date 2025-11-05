@@ -114,6 +114,7 @@ export interface MenuPromptConfig<T = any> {
   message?: string;
   choices: Choice<T>[];
   disabledActions?: ("create" | "edit" | "delete" | "extract")[];
+  enterLabel?: string;
 }
 
 const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
@@ -189,7 +190,8 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
     });
 
     const disabledActions = config.disabledActions || [];
-    const helpParts = ["↑/↓ move", "Enter=chat"];
+    const enterLabel = config.enterLabel ?? "chat";
+    const helpParts = [`↑/↓ move`, `Enter=${enterLabel}`];
     if (!disabledActions.includes("edit")) {
       helpParts.push("e=edit");
     }

@@ -154,6 +154,7 @@ async function userMenuPrompt(users: AdminUser[]): Promise<UserMenuResult> {
       message: "Admin Panel - Manage Users",
       choices,
       disabledActions: ["extract"],
+      enterLabel: "view",
     });
 
     if (result.action === "cancel") {

@@ -1,48 +1,30 @@
-import { Hono, type Context } from "hono";
-import { z } from "zod";
+import { Hono } from "hono";
 import type { AppVariables } from "../types.js";
 import { requireAuth } from "../middlewares/auth.js";
 import { auth } from "../auth.js";
 import { formatZodError } from "../validation.js";
+import {
+  requireAdmin,
+  createUserSchema,
+  listUsersSchema,
+  updateUserSchema,
+  setRoleSchema,
+  setPasswordSchema,
+  banUserSchema,
+  revokeSessionSchema,
+  impersonateUserSchema,
+} from "../admin.js";
 
 const adminRoute = new Hono<{ Variables: AppVariables }>();
 
 // Apply authentication middleware to all admin routes
 adminRoute.use("/*", requireAuth);
 
-// Middleware to check if user is admin
-const requireAdmin = async (
-  c: Context<{ Variables: AppVariables }>,
-  next: () => Promise<void>,
-) => {
-  const user = c.get("user")!;
-
-  // Check if user has admin role
-  if (!user.role || user.role !== "admin") {
-    return c.json({ error: "Unauthorized: Admin access required" }, 403);
-  }
-
-  await next();
-};
-
 adminRoute.use("/*", requireAdmin);
 
 // ============================================================================
 // User Management Routes
 // ============================================================================
-
-const roleInputSchema = z.union([
-  z.string().min(1, "Role must be a non-empty string"),
-  z.array(z.string().min(1, "Role entries must be non-empty")).min(1, "Provide at least one role"),
-]);
-
-const createUserSchema = z.strictObject({
-  email: z.string().email("Valid email is required"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  name: z.string().min(1, "Name is required"),
-  role: roleInputSchema.optional(),
-  data: z.record(z.string(), z.any()).optional(),
-});
 
 adminRoute.post("/users", async (c) => {
   const body = await c.req.json();
@@ -71,21 +53,6 @@ adminRoute.post("/users", async (c) => {
   }
 });
 
-const listUsersSchema = z.object({
-  limit: z.coerce.number().positive().optional(),
-  offset: z.coerce.number().nonnegative().optional(),
-  searchValue: z.string().optional(),
-  searchField: z.enum(["name", "email"]).optional(),
-  searchOperator: z.enum(["contains", "starts_with", "ends_with"]).optional(),
-  sortBy: z.string().optional(),
-  sortDirection: z.enum(["asc", "desc"]).optional(),
-  filterField: z.string().optional(),
-  filterValue: z
-    .union([z.string(), z.coerce.number(), z.enum(["true", "false"]).transform((v) => v === "true")])
-    .optional(),
-  filterOperator: z.enum(["eq", "ne", "gt", "lt", "gte", "lte", "contains"]).optional(),
-});
-
 adminRoute.get("/users", async (c) => {
   const query = c.req.query();
   const parsed = listUsersSchema.safeParse(query);
@@ -109,21 +76,6 @@ adminRoute.get("/users", async (c) => {
     );
   }
 });
-
-const updateUserSchema = z
-  .strictObject({
-    userId: z.string().min(1, "User ID is required"),
-    data: z.record(z.string(), z.any()),
-  })
-  .superRefine((value, ctx) => {
-    if (Object.keys(value.data).length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one field is required to update the user",
-        path: ["data"],
-      });
-    }
-  });
 
 adminRoute.patch("/users/:userId", async (c) => {
   const userId = c.req.param("userId");
@@ -150,11 +102,6 @@ adminRoute.patch("/users/:userId", async (c) => {
       500,
     );
   }
-});
-
-const setRoleSchema = z.strictObject({
-  userId: z.string().min(1, "User ID is required"),
-  role: roleInputSchema,
 });
 
 adminRoute.post("/users/:userId/role", async (c) => {
@@ -184,11 +131,6 @@ adminRoute.post("/users/:userId/role", async (c) => {
       500,
     );
   }
-});
-
-const setPasswordSchema = z.strictObject({
-  userId: z.string().min(1, "User ID is required"),
-  newPassword: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 adminRoute.post("/users/:userId/password", async (c) => {
@@ -248,12 +190,6 @@ adminRoute.delete("/users/:userId", async (c) => {
 // ============================================================================
 // User Banning Routes
 // ============================================================================
-
-const banUserSchema = z.strictObject({
-  userId: z.string().min(1, "User ID is required"),
-  banReason: z.string().optional(),
-  banExpiresIn: z.coerce.number().int().positive().optional(),
-});
 
 adminRoute.post("/users/:userId/ban", async (c) => {
   const userId = c.req.param("userId");
@@ -332,10 +268,6 @@ adminRoute.post("/users/:userId/sessions/list", async (c) => {
   }
 });
 
-const revokeSessionSchema = z.strictObject({
-  sessionToken: z.string().min(1, "Session token is required"),
-});
-
 adminRoute.post("/users/:userId/sessions/revoke", async (c) => {
   const body = await c.req.json();
   const parsed = revokeSessionSchema.safeParse(body);
@@ -382,10 +314,6 @@ adminRoute.post("/users/:userId/sessions/revoke-all", async (c) => {
 // ============================================================================
 // Impersonation Routes
 // ============================================================================
-
-const impersonateUserSchema = z.strictObject({
-  userId: z.string().min(1, "User ID is required"),
-});
 
 adminRoute.post("/users/:userId/impersonate", async (c) => {
   const userId = c.req.param("userId");

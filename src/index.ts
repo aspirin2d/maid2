@@ -4,7 +4,7 @@ import { auth } from "./auth.js";
 import type { AppVariables } from "./types.js";
 import { registerRoutes } from "./routes/index.js";
 import { env } from "./env.js";
-import { initializeDefaultAdmin } from "./init-admin.js";
+import { initializeDefaultAdmin } from "./admin.js";
 
 const app = new Hono<{
   Variables: AppVariables;
