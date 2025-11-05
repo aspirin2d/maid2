@@ -31,6 +31,7 @@ import {
   APP_BASE_URL,
   executeWithSession,
   isLoggedIn,
+  isAdmin,
   type CommandContext,
   type CommandDefinition,
   type CommandResult,
@@ -262,7 +263,7 @@ const COMMANDS: CommandDefinition[] = [
   {
     name: "/admin",
     description: "Admin panel for user management (admin only)",
-    isVisible: isLoggedIn,
+    isVisible: isAdmin,
     handler: async (context) => {
       await withSession(
         context,
