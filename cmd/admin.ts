@@ -713,14 +713,12 @@ async function listUserSessionsRequest(
   userId: string,
 ): Promise<AdminSession[]> {
   const response = await apiFetch(
-    `/api/admin/users/${userId}/sessions/list`,
+    `/api/admin/users/${userId}/sessions`,
     {
-      method: "POST",
+      method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
       },
-      body: JSON.stringify({}),
     },
     "app",
   );
@@ -926,7 +924,7 @@ async function deleteApiKeyRequest(token: string, keyId: string): Promise<boolea
 // Command Exports
 // ============================================================================
 
-export async function listUsersCommand(token: string) {
+async function listUsersCommand(token: string) {
   const users = await fetchUsers(token);
   if (users.length === 0) {
     console.log("No users found.");
@@ -941,11 +939,11 @@ export async function listUsersCommand(token: string) {
   console.log("");
 }
 
-export async function createUserCommand(token: string) {
+async function createUserCommand(token: string) {
   await createUserFlow(token);
 }
 
-export async function viewUserCommand(token: string, args: string[]) {
+async function viewUserCommand(token: string, args: string[]) {
   if (args.length === 0) {
     console.log("Usage: /admin user view <email>");
     return;
@@ -963,7 +961,7 @@ export async function viewUserCommand(token: string, args: string[]) {
   viewUserDetails(user);
 }
 
-export async function setUserRoleCommand(token: string, args: string[]) {
+async function setUserRoleCommand(token: string, args: string[]) {
   if (args.length < 2) {
     console.log("Usage: /admin user role <email> <role>");
     return;
@@ -984,7 +982,7 @@ export async function setUserRoleCommand(token: string, args: string[]) {
   }
 }
 
-export async function banUserCommand(
+async function banUserCommand(
   token: string,
   args: string[],
   currentUserId?: string | null,
@@ -1018,7 +1016,7 @@ export async function banUserCommand(
   }
 }
 
-export async function unbanUserCommand(token: string, args: string[]) {
+async function unbanUserCommand(token: string, args: string[]) {
   if (args.length === 0) {
     console.log("Usage: /admin user unban <email>");
     return;
@@ -1040,10 +1038,58 @@ export async function unbanUserCommand(token: string, args: string[]) {
 }
 
 // ============================================================================
+// User Management Router
+// ============================================================================
+
+export async function handleUserCommand(
+  token: string,
+  currentUserId: string | null,
+  args: string[],
+) {
+  if (args.length === 0) {
+    console.log("Usage: /admin user <list|create|view|role|ban|unban>");
+    console.log("\nAvailable commands:");
+    console.log("  list              - List all users");
+    console.log("  create            - Create a new user");
+    console.log("  view <email>      - View user details");
+    console.log("  role <email> <role> - Set user role");
+    console.log("  ban <email> [reason] - Ban a user");
+    console.log("  unban <email>     - Unban a user");
+    return;
+  }
+
+  const [subcommand, ...subArgs] = args;
+
+  switch (subcommand) {
+    case "list":
+      await listUsersCommand(token);
+      break;
+    case "create":
+      await createUserCommand(token);
+      break;
+    case "view":
+      await viewUserCommand(token, subArgs);
+      break;
+    case "role":
+      await setUserRoleCommand(token, subArgs);
+      break;
+    case "ban":
+      await banUserCommand(token, subArgs, currentUserId);
+      break;
+    case "unban":
+      await unbanUserCommand(token, subArgs);
+      break;
+    default:
+      console.log(`Unknown subcommand: ${subcommand}`);
+      console.log("Usage: /admin user <list|create|view|role|ban|unban>");
+  }
+}
+
+// ============================================================================
 // API Key Management Commands
 // ============================================================================
 
-export async function listApiKeysCommand(token: string, userEmail: string) {
+async function listApiKeysCommand(token: string, userEmail: string) {
   const apiKeys = await fetchUserApiKeys(token);
 
   if (apiKeys.length === 0) {
@@ -1061,7 +1107,7 @@ export async function listApiKeysCommand(token: string, userEmail: string) {
   console.log("");
 }
 
-export async function viewApiKeyCommand(token: string, args: string[]) {
+async function viewApiKeyCommand(token: string, args: string[]) {
   if (args.length === 0) {
     console.log("Usage: /admin key view <keyId>");
     return;
@@ -1123,7 +1169,7 @@ export async function viewApiKeyCommand(token: string, args: string[]) {
   console.log("");
 }
 
-export async function createApiKeyCommand(token: string, userEmail: string, args: string[]) {
+async function createApiKeyCommand(token: string, userEmail: string, args: string[]) {
   try {
     const name = args.length > 0 ? args.join(" ") : undefined;
 
@@ -1157,7 +1203,7 @@ export async function createApiKeyCommand(token: string, userEmail: string, args
   }
 }
 
-export async function deleteApiKeyCommand(token: string, args: string[]) {
+async function deleteApiKeyCommand(token: string, args: string[]) {
   if (args.length === 0) {
     console.log("Usage: /admin key delete <keyId>");
     return;
@@ -1195,7 +1241,7 @@ export async function deleteApiKeyCommand(token: string, args: string[]) {
   }
 }
 
-export async function toggleApiKeyCommand(token: string, args: string[]) {
+async function toggleApiKeyCommand(token: string, args: string[]) {
   if (args.length === 0) {
     console.log("Usage: /admin key toggle <keyId>");
     return;
