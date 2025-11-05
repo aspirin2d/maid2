@@ -19,6 +19,15 @@ import {
   viewMemoryCommand,
 } from "./memories.js";
 import {
+  browseUsers,
+  listUsersCommand,
+  createUserCommand,
+  viewUserCommand,
+  setUserRoleCommand,
+  banUserCommand,
+  unbanUserCommand,
+} from "./admin.js";
+import {
   APP_BASE_URL,
   executeWithSession,
   isLoggedIn,
@@ -245,6 +254,91 @@ const COMMANDS: CommandDefinition[] = [
             context,
             "No active session. Log in before extracting memories.",
             (token) => extractMemoriesCommand(token),
+          );
+        },
+      },
+    ],
+  },
+  {
+    name: "/admin",
+    description: "Admin panel for user management (admin only)",
+    isVisible: isLoggedIn,
+    handler: async (context) => {
+      await withSession(
+        context,
+        "No active session. Log in before accessing admin panel.",
+        (token) => browseUsers(token),
+      );
+    },
+    subcommands: [
+      {
+        name: "users",
+        description: "List all users",
+        aliases: ["list"],
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before listing users.",
+            (token) => listUsersCommand(token),
+          );
+        },
+      },
+      {
+        name: "create",
+        description: "Create a new user",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before creating users.",
+            (token) => createUserCommand(token),
+          );
+        },
+      },
+      {
+        name: "view",
+        description: "View user details",
+        usage: "<email>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before viewing users.",
+            (token) => viewUserCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "role",
+        description: "Set user role",
+        usage: "<email> <role>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before setting user roles.",
+            (token) => setUserRoleCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "ban",
+        description: "Ban a user",
+        usage: "<email> [reason]",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before banning users.",
+            (token) => banUserCommand(token, context.args),
+          );
+        },
+      },
+      {
+        name: "unban",
+        description: "Unban a user",
+        usage: "<email>",
+        handler: async (context) => {
+          await withSession(
+            context,
+            "No active session. Log in before unbanning users.",
+            (token) => unbanUserCommand(token, context.args),
           );
         },
       },

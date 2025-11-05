@@ -1,0 +1,839 @@
+import { confirm, input, select } from "@inquirer/prompts";
+import {
+  extractErrorMessage,
+  parseJSON,
+  formatTimestamp,
+  requiredField,
+} from "./lib.js";
+import { isPromptAbortError, menuPrompt, type MenuResult } from "./core.js";
+import { apiFetch } from "./api.js";
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: string | null;
+  banned: boolean;
+  banReason: string | null;
+  banExpires: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminSession = {
+  id: string;
+  userId: string;
+  token: string;
+  expiresAt: string;
+  createdAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
+type UserMenuResult =
+  | { type: "exit" }
+  | { type: "view"; user: AdminUser }
+  | { type: "edit"; user: AdminUser }
+  | { type: "create" }
+  | { type: "delete"; user: AdminUser }
+  | { type: "ban"; user: AdminUser }
+  | { type: "unban"; user: AdminUser }
+  | { type: "setRole"; user: AdminUser }
+  | { type: "sessions"; user: AdminUser };
+
+// ============================================================================
+// User Management
+// ============================================================================
+
+export async function browseUsers(token: string) {
+  while (true) {
+    const users = await fetchUsers(token);
+    if (users.length === 0) {
+      const wantsCreate = await confirm({
+        message: "No users found. Create one now?",
+        default: false,
+      });
+      if (!wantsCreate) {
+        console.log("No users available.");
+        return;
+      }
+      await createUserFlow(token);
+      continue;
+    }
+
+    const action = await userMenuPrompt(users);
+
+    if (action.type === "exit") {
+      return;
+    }
+
+    if (action.type === "view") {
+      viewUserDetails(action.user);
+      continue;
+    }
+
+    if (action.type === "create") {
+      await createUserFlow(token);
+      continue;
+    }
+
+    if (action.type === "edit") {
+      await editUserFlow(token, action.user);
+      continue;
+    }
+
+    if (action.type === "delete") {
+      const confirmed = await confirm({
+        message: `Delete user "${action.user.email}"? This action cannot be undone.`,
+        default: false,
+      });
+      if (!confirmed) {
+        continue;
+      }
+
+      const deleted = await deleteUserRequest(token, action.user.id);
+      if (deleted) {
+        console.log(`Deleted user ${action.user.email}.`);
+      }
+      continue;
+    }
+
+    if (action.type === "ban") {
+      await banUserFlow(token, action.user);
+      continue;
+    }
+
+    if (action.type === "unban") {
+      const confirmed = await confirm({
+        message: `Unban user "${action.user.email}"?`,
+        default: true,
+      });
+      if (!confirmed) {
+        continue;
+      }
+
+      const result = await unbanUserRequest(token, action.user.id);
+      if (result) {
+        console.log(`User ${action.user.email} has been unbanned.`);
+      }
+      continue;
+    }
+
+    if (action.type === "setRole") {
+      await setRoleFlow(token, action.user);
+      continue;
+    }
+
+    if (action.type === "sessions") {
+      await manageUserSessionsFlow(token, action.user);
+      continue;
+    }
+  }
+}
+
+async function userMenuPrompt(users: AdminUser[]): Promise<UserMenuResult> {
+  const choices = users.map((u) => ({
+    name: `${u.email} (${u.name}) ${u.banned ? "[BANNED]" : ""} - ${u.role || "user"}`,
+    value: u,
+  }));
+
+  try {
+    const result = await menuPrompt<AdminUser>({
+      message: "Admin Panel - Manage Users",
+      choices,
+      disabledActions: ["extract"],
+    });
+
+    if (result.action === "cancel") {
+      return { type: "exit" };
+    }
+    if (result.action === "open") {
+      return { type: "view", user: result.item.value };
+    }
+    if (result.action === "create") {
+      return { type: "create" };
+    }
+    if (result.action === "edit") {
+      return { type: "edit", user: result.item.value };
+    }
+    if (result.action === "delete") {
+      return { type: "delete", user: result.item.value };
+    }
+
+    return { type: "exit" };
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      return { type: "exit" };
+    }
+    throw error;
+  }
+}
+
+function viewUserDetails(user: AdminUser) {
+  console.log("\n=== User Details ===");
+  console.log(`ID: ${user.id}`);
+  console.log(`Email: ${user.email}`);
+  console.log(`Name: ${user.name}`);
+  console.log(`Role: ${user.role || "user"}`);
+  console.log(`Banned: ${user.banned ? "Yes" : "No"}`);
+  if (user.banned && user.banReason) {
+    console.log(`Ban Reason: ${user.banReason}`);
+  }
+  if (user.banned && user.banExpires) {
+    console.log(`Ban Expires: ${formatTimestamp(user.banExpires)}`);
+  }
+  console.log(`Created: ${formatTimestamp(user.createdAt)}`);
+  console.log(`Updated: ${formatTimestamp(user.updatedAt)}`);
+  console.log("");
+}
+
+async function createUserFlow(token: string) {
+  try {
+    const email = await input({
+      message: "User email",
+      validate: requiredField("Email"),
+    });
+
+    const password = await input({
+      message: "User password",
+      validate: (value) => {
+        if (!value || value.trim().length < 6) {
+          return "Password must be at least 6 characters";
+        }
+        return true;
+      },
+    });
+
+    const name = await input({
+      message: "User name",
+      validate: requiredField("Name"),
+    });
+
+    const role = await select({
+      message: "User role",
+      choices: [
+        { name: "User", value: "user" },
+        { name: "Admin", value: "admin" },
+      ],
+      default: "user",
+    });
+
+    const created = await createUserRequest(token, {
+      email: email.trim(),
+      password: password.trim(),
+      name: name.trim(),
+      role,
+    });
+
+    if (created) {
+      console.log(`Created user "${created.email}" (id ${created.id}).`);
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("User creation cancelled.");
+      return;
+    }
+    throw error;
+  }
+}
+
+async function editUserFlow(token: string, user: AdminUser) {
+  try {
+    const action = await select({
+      message: `Edit user "${user.email}"`,
+      choices: [
+        { name: "Change name", value: "name" },
+        { name: "Change role", value: "role" },
+        { name: "Change password", value: "password" },
+        { name: "Ban user", value: "ban" },
+        { name: "Unban user", value: "unban", disabled: !user.banned },
+        { name: "Cancel", value: "cancel" },
+      ],
+    });
+
+    if (action === "cancel") {
+      return;
+    }
+
+    if (action === "name") {
+      const newName = await input({
+        message: "New name",
+        default: user.name,
+        validate: requiredField("Name"),
+      });
+
+      const trimmed = newName.trim();
+      if (trimmed === user.name) {
+        console.log("Name unchanged.");
+        return;
+      }
+
+      const updated = await updateUserRequest(token, user.id, { name: trimmed });
+      if (updated) {
+        console.log(`User name updated to "${updated.name}".`);
+      }
+    } else if (action === "role") {
+      await setRoleFlow(token, user);
+    } else if (action === "password") {
+      const newPassword = await input({
+        message: "New password",
+        validate: (value) => {
+          if (!value || value.trim().length < 6) {
+            return "Password must be at least 6 characters";
+          }
+          return true;
+        },
+      });
+
+      const result = await setPasswordRequest(token, user.id, newPassword.trim());
+      if (result) {
+        console.log("Password updated successfully.");
+      }
+    } else if (action === "ban") {
+      await banUserFlow(token, user);
+    } else if (action === "unban") {
+      const result = await unbanUserRequest(token, user.id);
+      if (result) {
+        console.log(`User ${user.email} has been unbanned.`);
+      }
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Edit cancelled.");
+      return;
+    }
+    throw error;
+  }
+}
+
+async function setRoleFlow(token: string, user: AdminUser) {
+  try {
+    const newRole = await select({
+      message: `Set role for "${user.email}"`,
+      choices: [
+        { name: "User", value: "user" },
+        { name: "Admin", value: "admin" },
+      ],
+      default: user.role || "user",
+    });
+
+    if (newRole === user.role) {
+      console.log("Role unchanged.");
+      return;
+    }
+
+    const result = await setRoleRequest(token, user.id, newRole);
+    if (result) {
+      console.log(`User role updated to "${newRole}".`);
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Role change cancelled.");
+      return;
+    }
+    throw error;
+  }
+}
+
+async function banUserFlow(token: string, user: AdminUser) {
+  try {
+    const reason = await input({
+      message: "Ban reason (optional)",
+      default: "",
+    });
+
+    const duration = await select({
+      message: "Ban duration",
+      choices: [
+        { name: "1 hour", value: 3600 },
+        { name: "1 day", value: 86400 },
+        { name: "1 week", value: 604800 },
+        { name: "1 month", value: 2592000 },
+        { name: "Permanent", value: null },
+      ],
+      default: null,
+    });
+
+    const result = await banUserRequest(token, user.id, {
+      banReason: reason.trim() || undefined,
+      banExpiresIn: duration || undefined,
+    });
+
+    if (result) {
+      console.log(`User ${user.email} has been banned.`);
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Ban cancelled.");
+      return;
+    }
+    throw error;
+  }
+}
+
+async function manageUserSessionsFlow(token: string, user: AdminUser) {
+  try {
+    const sessions = await listUserSessionsRequest(token, user.id);
+
+    if (sessions.length === 0) {
+      console.log("No active sessions found for this user.");
+      return;
+    }
+
+    console.log(`\nActive sessions for ${user.email}:`);
+    sessions.forEach((s, i) => {
+      console.log(
+        `${i + 1}. Session ${s.id.substring(0, 8)}... - Created: ${formatTimestamp(s.createdAt)}`,
+      );
+    });
+
+    const action = await select({
+      message: "Session management",
+      choices: [
+        { name: "Revoke all sessions", value: "all" },
+        { name: "Revoke specific session", value: "one" },
+        { name: "Cancel", value: "cancel" },
+      ],
+    });
+
+    if (action === "cancel") {
+      return;
+    }
+
+    if (action === "all") {
+      const confirmed = await confirm({
+        message: "Revoke all sessions for this user?",
+        default: false,
+      });
+
+      if (!confirmed) {
+        return;
+      }
+
+      const result = await revokeAllUserSessionsRequest(token, user.id);
+      if (result) {
+        console.log("All sessions revoked successfully.");
+      }
+    } else if (action === "one") {
+      const sessionId = await select({
+        message: "Select session to revoke",
+        choices: sessions.map((s) => ({
+          name: `${s.id.substring(0, 16)}... - ${formatTimestamp(s.createdAt)}`,
+          value: s.id,
+        })),
+      });
+
+      const result = await revokeUserSessionRequest(token, user.id, sessionId);
+      if (result) {
+        console.log("Session revoked successfully.");
+      }
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("Session management cancelled.");
+      return;
+    }
+    throw error;
+  }
+}
+
+// ============================================================================
+// API Requests
+// ============================================================================
+
+async function fetchUsers(token: string): Promise<AdminUser[]> {
+  const response = await apiFetch(
+    "/api/admin/users",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to fetch users: ${message}`);
+    return [];
+  }
+
+  const data = await parseJSON<{ users: AdminUser[]; total: number }>(response);
+  return data?.users || [];
+}
+
+async function createUserRequest(
+  token: string,
+  payload: {
+    email: string;
+    password: string;
+    name: string;
+    role?: string;
+  },
+): Promise<AdminUser | null> {
+  const response = await apiFetch(
+    "/api/admin/users",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to create user: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ user: AdminUser }>(response);
+  return data?.user || null;
+}
+
+async function updateUserRequest(
+  token: string,
+  userId: string,
+  update: Record<string, any>,
+): Promise<AdminUser | null> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(update),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to update user: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ user: AdminUser }>(response);
+  return data?.user || null;
+}
+
+async function setRoleRequest(
+  token: string,
+  userId: string,
+  role: string,
+): Promise<AdminUser | null> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}/role`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ role }),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to set user role: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ user: AdminUser }>(response);
+  return data?.user || null;
+}
+
+async function setPasswordRequest(
+  token: string,
+  userId: string,
+  password: string,
+): Promise<boolean> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}/password`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to set user password: ${message}`);
+    return false;
+  }
+
+  return true;
+}
+
+async function deleteUserRequest(token: string, userId: string): Promise<boolean> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to delete user: ${message}`);
+    return false;
+  }
+
+  return true;
+}
+
+async function banUserRequest(
+  token: string,
+  userId: string,
+  options?: {
+    banReason?: string;
+    banExpiresIn?: number;
+  },
+): Promise<AdminUser | null> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}/ban`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(options || {}),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to ban user: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ user: AdminUser }>(response);
+  return data?.user || null;
+}
+
+async function unbanUserRequest(token: string, userId: string): Promise<AdminUser | null> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}/unban`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to unban user: ${message}`);
+    return null;
+  }
+
+  const data = await parseJSON<{ user: AdminUser }>(response);
+  return data?.user || null;
+}
+
+async function listUserSessionsRequest(
+  token: string,
+  userId: string,
+): Promise<AdminSession[]> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}/sessions`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to list user sessions: ${message}`);
+    return [];
+  }
+
+  const data = await parseJSON<{ sessions: AdminSession[] }>(response);
+  return data?.sessions || [];
+}
+
+async function revokeUserSessionRequest(
+  token: string,
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}/sessions/${sessionId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to revoke user session: ${message}`);
+    return false;
+  }
+
+  return true;
+}
+
+async function revokeAllUserSessionsRequest(
+  token: string,
+  userId: string,
+): Promise<boolean> {
+  const response = await apiFetch(
+    `/api/admin/users/${userId}/sessions`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.error(`Failed to revoke all user sessions: ${message}`);
+    return false;
+  }
+
+  return true;
+}
+
+// ============================================================================
+// Command Exports
+// ============================================================================
+
+export async function listUsersCommand(token: string) {
+  const users = await fetchUsers(token);
+  if (users.length === 0) {
+    console.log("No users found.");
+    return;
+  }
+
+  console.log("\n=== Users ===");
+  users.forEach((u) => {
+    const status = u.banned ? "[BANNED]" : "";
+    console.log(`${u.email} (${u.name}) - ${u.role || "user"} ${status}`);
+  });
+  console.log("");
+}
+
+export async function createUserCommand(token: string) {
+  await createUserFlow(token);
+}
+
+export async function viewUserCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin user view <email>");
+    return;
+  }
+
+  const email = args[0];
+  const users = await fetchUsers(token);
+  const user = users.find((u) => u.email === email);
+
+  if (!user) {
+    console.log(`User with email "${email}" not found.`);
+    return;
+  }
+
+  viewUserDetails(user);
+}
+
+export async function setUserRoleCommand(token: string, args: string[]) {
+  if (args.length < 2) {
+    console.log("Usage: /admin user role <email> <role>");
+    return;
+  }
+
+  const [email, role] = args;
+  const users = await fetchUsers(token);
+  const user = users.find((u) => u.email === email);
+
+  if (!user) {
+    console.log(`User with email "${email}" not found.`);
+    return;
+  }
+
+  const result = await setRoleRequest(token, user.id, role);
+  if (result) {
+    console.log(`User role updated to "${role}".`);
+  }
+}
+
+export async function banUserCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin user ban <email> [reason]");
+    return;
+  }
+
+  const [email, ...reasonParts] = args;
+  const users = await fetchUsers(token);
+  const user = users.find((u) => u.email === email);
+
+  if (!user) {
+    console.log(`User with email "${email}" not found.`);
+    return;
+  }
+
+  const reason = reasonParts.join(" ").trim();
+  const result = await banUserRequest(token, user.id, {
+    banReason: reason || undefined,
+  });
+
+  if (result) {
+    console.log(`User ${email} has been banned.`);
+  }
+}
+
+export async function unbanUserCommand(token: string, args: string[]) {
+  if (args.length === 0) {
+    console.log("Usage: /admin user unban <email>");
+    return;
+  }
+
+  const email = args[0];
+  const users = await fetchUsers(token);
+  const user = users.find((u) => u.email === email);
+
+  if (!user) {
+    console.log(`User with email "${email}" not found.`);
+    return;
+  }
+
+  const result = await unbanUserRequest(token, user.id);
+  if (result) {
+    console.log(`User ${email} has been unbanned.`);
+  }
+}
