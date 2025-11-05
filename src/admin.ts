@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
+import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import db from "./db.js";
-import { user } from "./schemas/db.js";
+import { user, apikey } from "./schemas/db.js";
 import { env } from "./env.js";
 import { auth } from "./auth.js";
 
@@ -88,6 +89,15 @@ import type { Context } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "./types.js";
 
+// ============================================================================
+// Drizzle Inferred Types
+// ============================================================================
+
+export type User = InferSelectModel<typeof user>;
+export type UserInsert = InferInsertModel<typeof user>;
+export type ApiKey = InferSelectModel<typeof apikey>;
+export type ApiKeyInsert = InferInsertModel<typeof apikey>;
+
 export type AdminContext = Context<{ Variables: AppVariables }>;
 export type AdminNext = () => Promise<void>;
 
@@ -137,10 +147,22 @@ export const listUsersSchema = z.object({
     .optional(),
 });
 
+// Schema for updating user - allows updating specific user table fields
 export const updateUserSchema = z
   .strictObject({
     userId: z.string().min(1, "User ID is required"),
-    data: z.record(z.string(), z.any()),
+    data: z
+      .object({
+        name: z.string().min(1).optional(),
+        email: z.string().email().optional(),
+        emailVerified: z.boolean().optional(),
+        image: z.string().nullable().optional(),
+        role: z.string().nullable().optional(),
+        banned: z.boolean().optional(),
+        banReason: z.string().nullable().optional(),
+        banExpires: z.date().nullable().optional(),
+      } satisfies Partial<Record<keyof User, unknown>>)
+      .passthrough(), // Allow additional fields for flexibility
   })
   .superRefine((value, ctx) => {
     if (Object.keys(value.data).length === 0) {
@@ -174,4 +196,41 @@ export const revokeSessionSchema = z.strictObject({
 
 export const impersonateUserSchema = z.strictObject({
   userId: z.string().min(1, "User ID is required"),
+});
+
+// ============================================================================
+// API Key Management Schemas
+// ============================================================================
+
+// Schema for creating API key - based on Better Auth API and apikey table structure
+// Types reference the apikey table structure for consistency
+export const createApiKeySchema = z.strictObject({
+  userId: z.string().min(1, "User ID is required"),
+  name: z.string().optional(),
+  expiresIn: z.coerce.number().int().positive().optional(),
+  prefix: z.string().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export const listApiKeysSchema = z.strictObject({
+  userId: z.string().min(1, "User ID is required"),
+});
+
+// Schema for updating API key - allows updating specific apikey table fields
+// Types reference the apikey table structure for consistency
+export const updateApiKeySchema = z.strictObject({
+  keyId: z.string().min(1, "Key ID is required"),
+  name: z.string().optional(),
+  enabled: z.boolean().optional(),
+  remaining: z.coerce.number().int().nonnegative().optional(),
+  refillInterval: z.coerce.number().int().positive().optional(),
+  refillAmount: z.coerce.number().int().positive().optional(),
+});
+
+export const deleteApiKeySchema = z.strictObject({
+  keyId: z.string().min(1, "Key ID is required"),
+});
+
+export const getApiKeySchema = z.strictObject({
+  keyId: z.string().min(1, "Key ID is required"),
 });

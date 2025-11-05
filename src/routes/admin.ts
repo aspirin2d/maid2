@@ -13,6 +13,11 @@ import {
   banUserSchema,
   revokeSessionSchema,
   impersonateUserSchema,
+  createApiKeySchema,
+  listApiKeysSchema,
+  updateApiKeySchema,
+  deleteApiKeySchema,
+  getApiKeySchema,
 } from "../admin.js";
 
 const adminRoute = new Hono<{ Variables: AppVariables }>();
@@ -350,6 +355,132 @@ adminRoute.post("/impersonate/stop", async (c) => {
     console.error("Failed to stop impersonating", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Failed to stop impersonating" },
+      500,
+    );
+  }
+});
+
+// ============================================================================
+// API Key Management Routes
+// ============================================================================
+
+adminRoute.post("/api-keys", async (c) => {
+  const body = await c.req.json();
+  const parsed = createApiKeySchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  try {
+    const result = await auth.api.createApiKey({
+      body: parsed.data,
+      headers: c.req.raw.headers,
+    });
+
+    return c.json({ apiKey: result });
+  } catch (error) {
+    console.error("Failed to create API key", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Failed to create API key" },
+      500,
+    );
+  }
+});
+
+adminRoute.get("/api-keys/user/:userId", async (c) => {
+  const userId = c.req.param("userId");
+  const parsed = listApiKeysSchema.safeParse({ userId });
+
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  try {
+    const result = await auth.api.listApiKeys({
+      query: { userId },
+      headers: c.req.raw.headers,
+    });
+
+    return c.json({ apiKeys: result });
+  } catch (error) {
+    console.error("Failed to list API keys", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Failed to list API keys" },
+      500,
+    );
+  }
+});
+
+adminRoute.get("/api-keys/:keyId", async (c) => {
+  const keyId = c.req.param("keyId");
+  const parsed = getApiKeySchema.safeParse({ keyId });
+
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  try {
+    const result = await auth.api.getApiKey({
+      query: { id: keyId },
+      headers: c.req.raw.headers,
+    });
+
+    return c.json({ apiKey: result });
+  } catch (error) {
+    console.error("Failed to get API key", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Failed to get API key" },
+      500,
+    );
+  }
+});
+
+adminRoute.patch("/api-keys/:keyId", async (c) => {
+  const keyId = c.req.param("keyId");
+  const body = await c.req.json();
+
+  const parsed = updateApiKeySchema.safeParse({ keyId, ...body });
+
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  try {
+    const result = await auth.api.updateApiKey({
+      body: parsed.data,
+      headers: c.req.raw.headers,
+    });
+
+    return c.json({ apiKey: result });
+  } catch (error) {
+    console.error("Failed to update API key", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Failed to update API key" },
+      500,
+    );
+  }
+});
+
+adminRoute.delete("/api-keys/:keyId", async (c) => {
+  const keyId = c.req.param("keyId");
+  const parsed = deleteApiKeySchema.safeParse({ keyId });
+
+  if (!parsed.success) {
+    return c.json({ error: formatZodError(parsed.error) }, 400);
+  }
+
+  try {
+    await auth.api.deleteApiKey({
+      body: { keyId },
+      headers: c.req.raw.headers,
+    });
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete API key", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Failed to delete API key" },
       500,
     );
   }
