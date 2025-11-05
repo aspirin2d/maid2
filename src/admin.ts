@@ -151,18 +151,16 @@ export const listUsersSchema = z.object({
 export const updateUserSchema = z
   .strictObject({
     userId: z.string().min(1, "User ID is required"),
-    data: z
-      .object({
-        name: z.string().min(1).optional(),
-        email: z.string().email().optional(),
-        emailVerified: z.boolean().optional(),
-        image: z.string().nullable().optional(),
-        role: z.string().nullable().optional(),
-        banned: z.boolean().optional(),
-        banReason: z.string().nullable().optional(),
-        banExpires: z.date().nullable().optional(),
-      } satisfies Partial<Record<keyof User, unknown>>)
-      .passthrough(), // Allow additional fields for flexibility
+    data: z.object({
+      name: z.string().min(1).optional(),
+      email: z.email().optional(),
+      emailVerified: z.boolean().optional(),
+      image: z.string().nullable().optional(),
+      role: z.string().nullable().optional(),
+      banned: z.boolean().optional(),
+      banReason: z.string().nullable().optional(),
+      banExpires: z.date().nullable().optional(),
+    } satisfies Partial<Record<keyof User, unknown>>),
   })
   .superRefine((value, ctx) => {
     if (Object.keys(value.data).length === 0) {
