@@ -7,7 +7,13 @@ const envSchema = z.object({
     .string()
     .regex(/^\d+$/, "PORT must be a valid number")
     .transform(Number)
-    .pipe(z.number().int().positive().max(65535, "PORT must be between 1 and 65535")),
+    .pipe(
+      z
+        .number()
+        .int()
+        .positive()
+        .max(65535, "PORT must be between 1 and 65535"),
+    ),
 
   // Authentication
   BETTER_AUTH_URL: z.url({ error: "BETTER_AUTH_URL must be a valid URL" }),
@@ -20,7 +26,13 @@ const envSchema = z.object({
     .string()
     .regex(/^\d+$/, "DB_PORT must be a valid number")
     .transform(Number)
-    .pipe(z.number().int().positive().max(65535, "DB_PORT must be between 1 and 65535")),
+    .pipe(
+      z
+        .number()
+        .int()
+        .positive()
+        .max(65535, "DB_PORT must be between 1 and 65535"),
+    ),
   DB_NAME: z.string().min(1, "DB_NAME is required"),
 
   // Optional: LLM providers
@@ -31,6 +43,8 @@ const envSchema = z.object({
   // Optional: LLM model configuration
   OPENAI_MODEL: z.string().optional(),
   OLLAMA_MODEL: z.string().optional(),
+
+  // Optional: Embedding model configuration
   OPENAI_EMBEDDING_MODEL: z.string().optional(),
   OLLAMA_EMBEDDING_MODEL: z.string().optional(),
 });
@@ -45,7 +59,9 @@ function validateEnv() {
         const path = issue.path.join(".");
         console.error(`   ${path}: ${issue.message}`);
       }
-      console.error("\nPlease check your .env file and ensure all required variables are set.");
+      console.error(
+        "\nPlease check your .env file and ensure all required variables are set.",
+      );
       process.exit(1);
     }
     throw error;
