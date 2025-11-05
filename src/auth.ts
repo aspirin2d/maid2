@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import db from "./db.js"; // your drizzle instance
 
-import { bearer, openAPI, admin } from "better-auth/plugins";
+import { bearer, openAPI, admin, apiKey } from "better-auth/plugins";
 import { env } from "./env.js";
 
 export const auth = betterAuth({
@@ -15,5 +15,5 @@ export const auth = betterAuth({
     autoSignIn: true,
     requireEmailVerification: false,
   },
-  plugins: [bearer(), admin(), openAPI()],
+  plugins: [bearer(), admin(), apiKey(), openAPI()],
 });
