@@ -4,6 +4,7 @@ import { auth } from "./auth.js";
 import type { AppVariables } from "./types.js";
 import { registerRoutes } from "./routes/index.js";
 import { env } from "./env.js";
+import { initializeDefaultAdmin } from "./init-admin.js";
 
 const app = new Hono<{
   Variables: AppVariables;
@@ -38,6 +39,9 @@ registerRoutes(app);
 app.get("/", (c) => {
   return c.text("Hello Hono!");
 });
+
+// Initialize default admin user before starting server
+await initializeDefaultAdmin();
 
 serve(
   {

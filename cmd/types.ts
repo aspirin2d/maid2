@@ -28,6 +28,7 @@ export type SessionUser = {
   emailVerified: boolean;
   name: string | null;
   image?: string | null;
+  role?: string | null;
 };
 
 export type SessionRecord = {

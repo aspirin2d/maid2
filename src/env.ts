@@ -18,6 +18,11 @@ const envSchema = z.object({
   // Authentication
   BETTER_AUTH_URL: z.url({ error: "BETTER_AUTH_URL must be a valid URL" }),
 
+  // Default Admin User (for initial setup)
+  DEFAULT_ADMIN_EMAIL: z.string().email("DEFAULT_ADMIN_EMAIL must be a valid email").optional(),
+  DEFAULT_ADMIN_PASSWORD: z.string().min(6, "DEFAULT_ADMIN_PASSWORD must be at least 6 characters").optional(),
+  DEFAULT_ADMIN_NAME: z.string().min(1).optional().default("Admin"),
+
   // Database
   DB_USER: z.string().min(1, "DB_USER is required"),
   DB_PASSWORD: z.string().min(1, "DB_PASSWORD is required"),

@@ -32,6 +32,10 @@ export type {
 
 const isLoggedIn = (session: SessionRecord | null) => Boolean(session?.token);
 
+const isAdmin = (session: SessionRecord | null) => {
+  return Boolean(session?.user?.role === "admin");
+};
+
 async function readSessionFile(): Promise<SessionRecord | null> {
   try {
     const raw = await fs.readFile(SESSION_FILE, "utf8");
@@ -223,6 +227,7 @@ export {
   executeWithSession,
   fetchSession,
   isLoggedIn,
+  isAdmin,
   readSessionFile,
   writeSessionFile,
   // Custom prompts
