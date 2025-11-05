@@ -163,3 +163,31 @@ export const memory = pgTable(
     ),
   ],
 );
+
+export const apiKey = pgTable(
+  "api_key",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    keyHash: text("key_hash").notNull().unique(),
+    name: text("name"), // Optional name/description for the key
+    expiresAt: timestamp("expires_at"), // Optional expiration
+    lastUsedAt: timestamp("last_used_at"), // Track usage
+    revokedAt: timestamp("revoked_at"), // Soft delete
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    // Index for finding keys by user
+    index("api_key_user_id_idx").on(table.userId),
+    // Index for key hash lookups (authentication)
+    index("api_key_hash_idx").on(table.keyHash),
+    // Composite index for finding active keys by user
+    index("api_key_user_revoked_idx").on(table.userId, table.revokedAt),
+  ],
+);
