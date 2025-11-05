@@ -1064,7 +1064,7 @@ export async function listApiKeysCommand(token: string, userId: string, userEmai
 
 export async function viewApiKeyCommand(token: string, args: string[]) {
   if (args.length === 0) {
-    console.log("Usage: /admin apikey view <keyId>");
+    console.log("Usage: /admin key view <keyId>");
     return;
   }
 
@@ -1161,7 +1161,7 @@ export async function createApiKeyCommand(token: string, userId: string, userEma
 
 export async function deleteApiKeyCommand(token: string, args: string[]) {
   if (args.length === 0) {
-    console.log("Usage: /admin apikey delete <keyId>");
+    console.log("Usage: /admin key delete <keyId>");
     return;
   }
 
@@ -1199,7 +1199,7 @@ export async function deleteApiKeyCommand(token: string, args: string[]) {
 
 export async function toggleApiKeyCommand(token: string, args: string[]) {
   if (args.length === 0) {
-    console.log("Usage: /admin apikey toggle <keyId>");
+    console.log("Usage: /admin key toggle <keyId>");
     return;
   }
 
@@ -1220,5 +1220,50 @@ export async function toggleApiKeyCommand(token: string, args: string[]) {
     console.log(
       `API key ${keyId} ${newStatus ? "enabled" : "disabled"} successfully.`,
     );
+  }
+}
+
+// ============================================================================
+// API Key Management Router
+// ============================================================================
+
+export async function handleApiKeyCommand(
+  token: string,
+  userId: string,
+  userEmail: string,
+  args: string[],
+) {
+  if (args.length === 0) {
+    console.log("Usage: /admin key <list|view|create|delete|toggle>");
+    console.log("\nAvailable commands:");
+    console.log("  list              - List your API keys");
+    console.log("  view <keyId>      - View API key details");
+    console.log("  create [name]     - Create a new API key");
+    console.log("  delete <keyId>    - Delete an API key");
+    console.log("  toggle <keyId>    - Enable or disable an API key");
+    return;
+  }
+
+  const [subcommand, ...subArgs] = args;
+
+  switch (subcommand) {
+    case "list":
+      await listApiKeysCommand(token, userId, userEmail);
+      break;
+    case "view":
+      await viewApiKeyCommand(token, subArgs);
+      break;
+    case "create":
+      await createApiKeyCommand(token, userId, userEmail, subArgs);
+      break;
+    case "delete":
+      await deleteApiKeyCommand(token, subArgs);
+      break;
+    case "toggle":
+      await toggleApiKeyCommand(token, subArgs);
+      break;
+    default:
+      console.log(`Unknown subcommand: ${subcommand}`);
+      console.log("Usage: /admin key <list|view|create|delete|toggle>");
   }
 }
