@@ -175,3 +175,36 @@ export const revokeSessionSchema = z.strictObject({
 export const impersonateUserSchema = z.strictObject({
   userId: z.string().min(1, "User ID is required"),
 });
+
+// ============================================================================
+// API Key Management Schemas
+// ============================================================================
+
+export const createApiKeySchema = z.strictObject({
+  userId: z.string().min(1, "User ID is required"),
+  name: z.string().optional(),
+  expiresIn: z.coerce.number().int().positive().optional(),
+  prefix: z.string().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export const listApiKeysSchema = z.strictObject({
+  userId: z.string().min(1, "User ID is required"),
+});
+
+export const updateApiKeySchema = z.strictObject({
+  keyId: z.string().min(1, "Key ID is required"),
+  name: z.string().optional(),
+  enabled: z.boolean().optional(),
+  remaining: z.coerce.number().int().nonnegative().optional(),
+  refillInterval: z.coerce.number().int().positive().optional(),
+  refillAmount: z.coerce.number().int().positive().optional(),
+});
+
+export const deleteApiKeySchema = z.strictObject({
+  keyId: z.string().min(1, "Key ID is required"),
+});
+
+export const getApiKeySchema = z.strictObject({
+  keyId: z.string().min(1, "Key ID is required"),
+});
