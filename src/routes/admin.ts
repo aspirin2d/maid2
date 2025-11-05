@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../types.js";
 import { requireAuth } from "../middlewares/auth.js";
@@ -11,7 +11,10 @@ const adminRoute = new Hono<{ Variables: AppVariables }>();
 adminRoute.use("/*", requireAuth);
 
 // Middleware to check if user is admin
-const requireAdmin = async (c: any, next: any) => {
+const requireAdmin = async (
+  c: Context<{ Variables: AppVariables }>,
+  next: () => Promise<void>,
+) => {
   const user = c.get("user")!;
 
   // Check if user has admin role
@@ -115,6 +118,7 @@ adminRoute.patch("/users/:userId", async (c) => {
   try {
     const result = await auth.api.updateUser({
       body: parsed.data,
+      headers: c.req.raw.headers,
     });
 
     return c.json({ user: result });
@@ -167,7 +171,7 @@ adminRoute.post("/users/:userId/password", async (c) => {
   const userId = c.req.param("userId");
   const body = await c.req.json();
 
-  const parsed = setPasswordSchema.safeParse({ userId, newPassword: body.password });
+  const parsed = setPasswordSchema.safeParse({ userId, newPassword: body.newPassword || body.password });
 
   if (!parsed.success) {
     return c.json({ error: formatZodError(parsed.error) }, 400);
@@ -191,6 +195,15 @@ adminRoute.post("/users/:userId/password", async (c) => {
 
 adminRoute.delete("/users/:userId", async (c) => {
   const userId = c.req.param("userId");
+  const currentUser = c.get("user")!;
+
+  // Prevent self-deletion
+  if (userId === currentUser.id) {
+    return c.json(
+      { error: "Cannot delete your own account. Please ask another admin." },
+      400,
+    );
+  }
 
   try {
     await auth.api.removeUser({
@@ -220,6 +233,15 @@ const banUserSchema = z.strictObject({
 adminRoute.post("/users/:userId/ban", async (c) => {
   const userId = c.req.param("userId");
   const body = await c.req.json();
+  const currentUser = c.get("user")!;
+
+  // Prevent self-banning
+  if (userId === currentUser.id) {
+    return c.json(
+      { error: "Cannot ban your own account. Please ask another admin." },
+      400,
+    );
+  }
 
   const parsed = banUserSchema.safeParse({ userId, ...body });
 
@@ -230,6 +252,7 @@ adminRoute.post("/users/:userId/ban", async (c) => {
   try {
     const result = await auth.api.banUser({
       body: parsed.data,
+      headers: c.req.raw.headers,
     });
 
     return c.json({ user: result });
@@ -248,6 +271,7 @@ adminRoute.post("/users/:userId/unban", async (c) => {
   try {
     const result = await auth.api.unbanUser({
       body: { userId },
+      headers: c.req.raw.headers,
     });
 
     return c.json({ user: result });
@@ -340,6 +364,7 @@ adminRoute.post("/users/:userId/impersonate", async (c) => {
   try {
     const result = await auth.api.impersonateUser({
       body: parsed.data,
+      headers: c.req.raw.headers,
     });
 
     return c.json(result);
