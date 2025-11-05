@@ -1,7 +1,4 @@
-import type {
-  CommandDefinition,
-  SubcommandDefinition,
-} from "./core.js";
+import type { CommandDefinition } from "./core.js";
 
 // ============================================================================
 // Utilities
@@ -194,18 +191,7 @@ function renderCommandMenu(commands: CommandDefinition[]) {
     const label = commandLabels[index];
     const padded = label.padEnd(nameWidth, " ");
     console.log(`  ${padded}  ${command.description}`);
-    if (command.subcommands?.length) {
-      renderSubcommandMenu(command.subcommands);
-    }
   });
-}
-
-function renderSubcommandMenu(subcommands: SubcommandDefinition[]) {
-  for (const sub of subcommands) {
-    const aliases = sub.aliases?.length ? ` (${sub.aliases.join(", ")})` : "";
-    const usage = sub.usage ? ` — ${sub.usage}` : "";
-    console.log(`      - ${sub.name}${aliases}${usage}: ${sub.description}`);
-  }
 }
 
 function showHelp(
