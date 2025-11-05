@@ -1,6 +1,6 @@
 import "dotenv/config";
 import process from "node:process";
-import { input } from "@inquirer/prompts";
+import { search } from "@inquirer/prompts";
 import {
   availableCommandInputs,
   resolveCommandInput,
@@ -22,21 +22,39 @@ async function main() {
       const commands = visibleCommands(sessionRecord);
       const availableInputs = availableCommandInputs(commands);
 
-      const choice = (
-        await input({
-          message: "Enter a command (type /help for options):",
-          validate: (value) => {
-            if (!value?.trim()) {
-              return "Command is required.";
-            }
-            const normalized = value.trim();
-            if (!resolveCommandInput(normalized, commands)) {
-              return `Unknown command. Expected one of: ${availableInputs.join(", ")}`;
-            }
-            return true;
-          },
-        })
-      ).trim();
+      const choice = await search({
+        message: "Enter a command:",
+        source: async (term) => {
+          // If no search term, show all available commands
+          if (!term) {
+            return availableInputs.map((cmd) => ({
+              name: cmd,
+              value: cmd,
+            }));
+          }
+
+          // Filter commands based on search term
+          const normalizedTerm = term.toLowerCase();
+          const filtered = availableInputs.filter((cmd) =>
+            cmd.toLowerCase().includes(normalizedTerm)
+          );
+
+          return filtered.map((cmd) => ({
+            name: cmd,
+            value: cmd,
+          }));
+        },
+        validate: (value) => {
+          if (!value?.trim()) {
+            return "Command is required.";
+          }
+          const normalized = value.trim();
+          if (!resolveCommandInput(normalized, commands)) {
+            return `Unknown command. Expected one of: ${availableInputs.join(", ")}`;
+          }
+          return true;
+        },
+      });
 
       const result = await runCommand(choice, sessionRecord);
       if (result?.exit) {
