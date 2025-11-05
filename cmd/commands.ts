@@ -350,13 +350,12 @@ const COMMANDS: CommandDefinition[] = [
       },
       {
         name: "apikey-list",
-        description: "List API keys for a user",
-        usage: "<email>",
+        description: "List your API keys",
         handler: async (context) => {
           await withSession(
             context,
             "No active session. Log in before listing API keys.",
-            (token, _session) => listApiKeysCommand(token, context.args),
+            (token, session) => listApiKeysCommand(token, session.user!.id, session.user!.email),
           );
         },
       },
@@ -374,13 +373,13 @@ const COMMANDS: CommandDefinition[] = [
       },
       {
         name: "apikey-create",
-        description: "Create an API key for a user",
-        usage: "<email> [name]",
+        description: "Create a new API key",
+        usage: "[name]",
         handler: async (context) => {
           await withSession(
             context,
             "No active session. Log in before creating API keys.",
-            (token, _session) => createApiKeyCommand(token, context.args),
+            (token, session) => createApiKeyCommand(token, session.user!.id, session.user!.email, context.args),
           );
         },
       },

@@ -1044,29 +1044,15 @@ export async function unbanUserCommand(token: string, args: string[]) {
 // API Key Management Commands
 // ============================================================================
 
-export async function listApiKeysCommand(token: string, args: string[]) {
-  if (args.length === 0) {
-    console.log("Usage: /admin apikey list <email>");
-    return;
-  }
-
-  const email = args[0];
-  const users = await fetchUsers(token);
-  const user = users.find((u) => u.email === email);
-
-  if (!user) {
-    console.log(`User with email "${email}" not found.`);
-    return;
-  }
-
-  const apiKeys = await fetchUserApiKeys(token, user.id);
+export async function listApiKeysCommand(token: string, userId: string, userEmail: string) {
+  const apiKeys = await fetchUserApiKeys(token, userId);
 
   if (apiKeys.length === 0) {
-    console.log(`No API keys found for user ${email}.`);
+    console.log(`No API keys found for user ${userEmail}.`);
     return;
   }
 
-  console.log(`\n=== API Keys for ${email} ===`);
+  console.log(`\n=== API Keys for ${userEmail} ===`);
   apiKeys.forEach((key) => {
     const status = key.enabled ? "enabled" : "disabled";
     const name = key.name || "(no name)";
@@ -1138,26 +1124,12 @@ export async function viewApiKeyCommand(token: string, args: string[]) {
   console.log("");
 }
 
-export async function createApiKeyCommand(token: string, args: string[]) {
-  if (args.length === 0) {
-    console.log("Usage: /admin apikey create <email> [name]");
-    return;
-  }
-
-  const [email, ...nameParts] = args;
-  const users = await fetchUsers(token);
-  const user = users.find((u) => u.email === email);
-
-  if (!user) {
-    console.log(`User with email "${email}" not found.`);
-    return;
-  }
-
+export async function createApiKeyCommand(token: string, userId: string, userEmail: string, args: string[]) {
   try {
-    const name = nameParts.length > 0 ? nameParts.join(" ") : undefined;
+    const name = args.length > 0 ? args.join(" ") : undefined;
 
     const confirmed = await confirm({
-      message: `Create API key for user "${email}"?`,
+      message: `Create API key for "${userEmail}"${name ? ` with name "${name}"` : ""}?`,
       default: true,
     });
 
@@ -1167,7 +1139,7 @@ export async function createApiKeyCommand(token: string, args: string[]) {
     }
 
     const apiKey = await createApiKeyRequest(token, {
-      userId: user.id,
+      userId: userId,
       name,
     });
 
