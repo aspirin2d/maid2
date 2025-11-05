@@ -365,6 +365,7 @@ adminRoute.post("/impersonate/stop", async (c) => {
 // ============================================================================
 
 adminRoute.post("/api-keys", async (c) => {
+  const currentUser = c.get("user")!;
   const body = await c.req.json();
   const parsed = createApiKeySchema.safeParse(body);
 
@@ -373,8 +374,9 @@ adminRoute.post("/api-keys", async (c) => {
   }
 
   try {
+    // Create API key for current user only
     const result = await auth.api.createApiKey({
-      body: parsed.data,
+      body: { ...parsed.data, userId: currentUser.id },
       headers: c.req.raw.headers,
     });
 
@@ -388,17 +390,13 @@ adminRoute.post("/api-keys", async (c) => {
   }
 });
 
-adminRoute.get("/api-keys/user/:userId", async (c) => {
-  const userId = c.req.param("userId");
-  const parsed = listApiKeysSchema.safeParse({ userId });
-
-  if (!parsed.success) {
-    return c.json({ error: formatZodError(parsed.error) }, 400);
-  }
+adminRoute.get("/api-keys", async (c) => {
+  const currentUser = c.get("user")!;
 
   try {
+    // List API keys for current user only
     const result = await auth.api.listApiKeys({
-      query: { userId },
+      query: { userId: currentUser.id },
       headers: c.req.raw.headers,
     });
 
@@ -413,6 +411,7 @@ adminRoute.get("/api-keys/user/:userId", async (c) => {
 });
 
 adminRoute.get("/api-keys/:keyId", async (c) => {
+  const currentUser = c.get("user")!;
   const keyId = c.req.param("keyId");
   const parsed = getApiKeySchema.safeParse({ keyId });
 
@@ -426,6 +425,11 @@ adminRoute.get("/api-keys/:keyId", async (c) => {
       headers: c.req.raw.headers,
     });
 
+    // Verify the API key belongs to the current user
+    if (result.userId !== currentUser.id) {
+      return c.json({ error: "API key not found or access denied" }, 404);
+    }
+
     return c.json({ apiKey: result });
   } catch (error) {
     console.error("Failed to get API key", error);
@@ -437,6 +441,7 @@ adminRoute.get("/api-keys/:keyId", async (c) => {
 });
 
 adminRoute.patch("/api-keys/:keyId", async (c) => {
+  const currentUser = c.get("user")!;
   const keyId = c.req.param("keyId");
   const body = await c.req.json();
 
@@ -447,6 +452,16 @@ adminRoute.patch("/api-keys/:keyId", async (c) => {
   }
 
   try {
+    // First verify the key belongs to the current user
+    const existingKey = await auth.api.getApiKey({
+      query: { id: keyId },
+      headers: c.req.raw.headers,
+    });
+
+    if (existingKey.userId !== currentUser.id) {
+      return c.json({ error: "API key not found or access denied" }, 404);
+    }
+
     const result = await auth.api.updateApiKey({
       body: parsed.data,
       headers: c.req.raw.headers,
@@ -463,6 +478,7 @@ adminRoute.patch("/api-keys/:keyId", async (c) => {
 });
 
 adminRoute.delete("/api-keys/:keyId", async (c) => {
+  const currentUser = c.get("user")!;
   const keyId = c.req.param("keyId");
   const parsed = deleteApiKeySchema.safeParse({ keyId });
 
@@ -471,6 +487,16 @@ adminRoute.delete("/api-keys/:keyId", async (c) => {
   }
 
   try {
+    // First verify the key belongs to the current user
+    const existingKey = await auth.api.getApiKey({
+      query: { id: keyId },
+      headers: c.req.raw.headers,
+    });
+
+    if (existingKey.userId !== currentUser.id) {
+      return c.json({ error: "API key not found or access denied" }, 404);
+    }
+
     await auth.api.deleteApiKey({
       body: { keyId },
       headers: c.req.raw.headers,

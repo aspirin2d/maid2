@@ -352,7 +352,7 @@ const COMMANDS: CommandDefinition[] = [
           await withSession(
             context,
             "No active session. Log in before managing API keys.",
-            (token, session) => handleApiKeyCommand(token, session.user!.id, session.user!.email, context.args),
+            (token, session) => handleApiKeyCommand(token, session.user!.email, context.args),
           );
         },
       },

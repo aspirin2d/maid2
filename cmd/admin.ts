@@ -792,9 +792,9 @@ async function revokeAllUserSessionsRequest(
 // API Key Management API Requests
 // ============================================================================
 
-async function fetchUserApiKeys(token: string, userId: string): Promise<AdminApiKey[]> {
+async function fetchUserApiKeys(token: string): Promise<AdminApiKey[]> {
   const response = await apiFetch(
-    `/api/admin/api-keys/user/${userId}`,
+    `/api/admin/api-keys`,
     {
       method: "GET",
       headers: {
@@ -817,7 +817,6 @@ async function fetchUserApiKeys(token: string, userId: string): Promise<AdminApi
 async function createApiKeyRequest(
   token: string,
   payload: {
-    userId: string;
     name?: string;
     expiresIn?: number;
     prefix?: string;
@@ -1044,8 +1043,8 @@ export async function unbanUserCommand(token: string, args: string[]) {
 // API Key Management Commands
 // ============================================================================
 
-export async function listApiKeysCommand(token: string, userId: string, userEmail: string) {
-  const apiKeys = await fetchUserApiKeys(token, userId);
+export async function listApiKeysCommand(token: string, userEmail: string) {
+  const apiKeys = await fetchUserApiKeys(token);
 
   if (apiKeys.length === 0) {
     console.log(`No API keys found for user ${userEmail}.`);
@@ -1124,7 +1123,7 @@ export async function viewApiKeyCommand(token: string, args: string[]) {
   console.log("");
 }
 
-export async function createApiKeyCommand(token: string, userId: string, userEmail: string, args: string[]) {
+export async function createApiKeyCommand(token: string, userEmail: string, args: string[]) {
   try {
     const name = args.length > 0 ? args.join(" ") : undefined;
 
@@ -1139,7 +1138,6 @@ export async function createApiKeyCommand(token: string, userId: string, userEma
     }
 
     const apiKey = await createApiKeyRequest(token, {
-      userId: userId,
       name,
     });
 
@@ -1229,7 +1227,6 @@ export async function toggleApiKeyCommand(token: string, args: string[]) {
 
 export async function handleApiKeyCommand(
   token: string,
-  userId: string,
   userEmail: string,
   args: string[],
 ) {
@@ -1248,13 +1245,13 @@ export async function handleApiKeyCommand(
 
   switch (subcommand) {
     case "list":
-      await listApiKeysCommand(token, userId, userEmail);
+      await listApiKeysCommand(token, userEmail);
       break;
     case "view":
       await viewApiKeyCommand(token, subArgs);
       break;
     case "create":
-      await createApiKeyCommand(token, userId, userEmail, subArgs);
+      await createApiKeyCommand(token, userEmail, subArgs);
       break;
     case "delete":
       await deleteApiKeyCommand(token, subArgs);
