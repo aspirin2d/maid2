@@ -23,7 +23,6 @@ export type {
   SessionUser,
   StoryHandlerInfo,
   StoryRecord,
-  SubcommandDefinition,
 } from "./types.js";
 
 // ============================================================================

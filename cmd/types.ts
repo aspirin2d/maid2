@@ -84,15 +84,6 @@ export interface CommandDefinition {
   aliases?: string[];
   isVisible?: (session: SessionRecord | null) => boolean;
   handler: CommandHandler;
-  subcommands?: SubcommandDefinition[];
-}
-
-export interface SubcommandDefinition {
-  name: string;
-  description: string;
-  aliases?: string[];
-  usage?: string;
-  handler: CommandHandler;
 }
 
 export interface CommandContext {
@@ -100,7 +91,6 @@ export interface CommandContext {
   rawInput: string;
   args: string[];
   command: CommandDefinition;
-  subcommand?: SubcommandDefinition;
 }
 
 export type CommandHandler = (

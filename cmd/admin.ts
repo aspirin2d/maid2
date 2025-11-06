@@ -7,10 +7,13 @@ import {
 } from "./lib.js";
 import { isPromptAbortError, menuPrompt, type MenuResult } from "./core.js";
 import { apiFetch } from "./api.js";
+import { createPrompt, useKeypress } from "@inquirer/core";
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
+
+type AdminMenuOption = "users" | "keys" | "exit";
 
 export type AdminUser = {
   id: string;
@@ -68,6 +71,55 @@ type UserMenuResult =
   | { type: "unban"; user: AdminUser }
   | { type: "setRole"; user: AdminUser }
   | { type: "sessions"; user: AdminUser };
+
+type ApiKeyMenuResult =
+  | { type: "exit" }
+  | { type: "view"; key: AdminApiKey }
+  | { type: "create" }
+  | { type: "delete"; key: AdminApiKey }
+  | { type: "toggle"; key: AdminApiKey };
+
+// ============================================================================
+// Admin Panel Main Menu
+// ============================================================================
+
+export async function browseAdmin(
+  token: string,
+  currentUserId: string | null,
+  userEmail: string,
+) {
+  while (true) {
+    try {
+      const choice = await select<AdminMenuOption>({
+        message: "Admin Panel",
+        choices: [
+          { name: "Manage Users", value: "users" as AdminMenuOption },
+          { name: "Manage API Keys", value: "keys" as AdminMenuOption },
+          { name: "Back to Main Menu", value: "exit" as AdminMenuOption },
+        ],
+      });
+
+      if (choice === "exit") {
+        return;
+      }
+
+      if (choice === "users") {
+        await browseUsers(token, currentUserId);
+        continue;
+      }
+
+      if (choice === "keys") {
+        await browseApiKeys(token, userEmail);
+        continue;
+      }
+    } catch (error) {
+      if (isPromptAbortError(error)) {
+        return;
+      }
+      throw error;
+    }
+  }
+}
 
 // ============================================================================
 // User Management
@@ -1082,6 +1134,212 @@ export async function handleUserCommand(
     default:
       console.log(`Unknown subcommand: ${subcommand}`);
       console.log("Usage: /admin user <list|create|view|role|ban|unban>");
+  }
+}
+
+// ============================================================================
+// API Key Management
+// ============================================================================
+
+async function browseApiKeys(token: string, userEmail: string) {
+  while (true) {
+    const apiKeys = await fetchUserApiKeys(token);
+    if (apiKeys.length === 0) {
+      const wantsCreate = await confirm({
+        message: "No API keys found. Create one now?",
+        default: true,
+      });
+      if (!wantsCreate) {
+        console.log("No API keys available.");
+        return;
+      }
+      await createApiKeyFlow(token, userEmail);
+      continue;
+    }
+
+    const action = await apiKeyMenuPrompt(apiKeys);
+
+    if (action.type === "exit") {
+      return;
+    }
+
+    if (action.type === "view") {
+      viewApiKeyDetails(action.key);
+      continue;
+    }
+
+    if (action.type === "create") {
+      await createApiKeyFlow(token, userEmail);
+      continue;
+    }
+
+    if (action.type === "delete") {
+      const confirmed = await confirm({
+        message: `Delete API key "${action.key.name || action.key.id}"? This action cannot be undone.`,
+        default: false,
+      });
+      if (!confirmed) {
+        continue;
+      }
+
+      const deleted = await deleteApiKeyRequest(token, action.key.id);
+      if (deleted) {
+        console.log(`Deleted API key ${action.key.id}.`);
+      }
+      continue;
+    }
+
+    if (action.type === "toggle") {
+      const newStatus = !action.key.enabled;
+      const result = await updateApiKeyRequest(token, action.key.id, {
+        enabled: newStatus,
+      });
+      if (result) {
+        console.log(
+          `API key ${action.key.id} ${newStatus ? "enabled" : "disabled"}.`,
+        );
+      }
+      continue;
+    }
+  }
+}
+
+async function apiKeyMenuPrompt(
+  apiKeys: AdminApiKey[],
+): Promise<ApiKeyMenuResult> {
+  if (apiKeys.length === 0) {
+    return { type: "exit" };
+  }
+
+  try {
+    const result = await menuPrompt<AdminApiKey>({
+      message: "API Keys",
+      choices: apiKeys.map((key) => {
+        const status = key.enabled ? "enabled" : "disabled";
+        const name = key.name || "(no name)";
+        const expires = key.expiresAt
+          ? ` - Expires: ${formatTimestamp(key.expiresAt)}`
+          : "";
+        return {
+          name: `[${key.id}] ${name} [${status}]${expires}`,
+          value: key,
+        };
+      }),
+      disabledActions: ["extract", "edit"],
+      enterLabel: "view",
+    });
+
+    if (result.action === "cancel") {
+      return { type: "exit" };
+    }
+    if (result.action === "open") {
+      return { type: "view", key: result.item.value };
+    }
+    if (result.action === "create") {
+      return { type: "create" };
+    }
+    if (result.action === "delete") {
+      return { type: "delete", key: result.item.value };
+    }
+
+    return { type: "exit" };
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      return { type: "exit" };
+    }
+    throw error;
+  }
+}
+
+function viewApiKeyDetails(apiKey: AdminApiKey) {
+  console.log("\n=== API Key Details ===");
+  console.log(`ID: ${apiKey.id}`);
+  console.log(`Name: ${apiKey.name || "(no name)"}`);
+  console.log(`User ID: ${apiKey.userId}`);
+  console.log(`Enabled: ${apiKey.enabled ? "Yes" : "No"}`);
+  console.log(`Key: ${apiKey.key}`);
+  console.log(`Prefix: ${apiKey.prefix || "N/A"}`);
+  console.log(`Start: ${apiKey.start || "N/A"}`);
+
+  if (apiKey.rateLimitEnabled) {
+    console.log(
+      `Rate Limit: ${apiKey.rateLimitMax} requests per ${apiKey.rateLimitTimeWindow}ms`,
+    );
+    console.log(`Request Count: ${apiKey.requestCount}`);
+  }
+
+  if (apiKey.remaining !== null) {
+    console.log(`Remaining: ${apiKey.remaining}`);
+  }
+
+  if (apiKey.refillInterval && apiKey.refillAmount) {
+    console.log(
+      `Refill: ${apiKey.refillAmount} every ${apiKey.refillInterval}ms`,
+    );
+  }
+
+  if (apiKey.lastRefillAt) {
+    console.log(`Last Refill: ${formatTimestamp(apiKey.lastRefillAt)}`);
+  }
+
+  if (apiKey.lastRequest) {
+    console.log(`Last Request: ${formatTimestamp(apiKey.lastRequest)}`);
+  }
+
+  if (apiKey.expiresAt) {
+    console.log(`Expires: ${formatTimestamp(apiKey.expiresAt)}`);
+  }
+
+  console.log(`Created: ${formatTimestamp(apiKey.createdAt)}`);
+  console.log(`Updated: ${formatTimestamp(apiKey.updatedAt)}`);
+
+  if (apiKey.permissions) {
+    console.log(`Permissions: ${apiKey.permissions}`);
+  }
+
+  if (apiKey.metadata) {
+    console.log(`Metadata: ${apiKey.metadata}`);
+  }
+
+  console.log("");
+}
+
+async function createApiKeyFlow(token: string, userEmail: string) {
+  try {
+    const name = await input({
+      message: "API key name (optional)",
+      default: "",
+    });
+
+    const confirmed = await confirm({
+      message: `Create API key for "${userEmail}"${name ? ` with name "${name}"` : ""}?`,
+      default: true,
+    });
+
+    if (!confirmed) {
+      console.log("API key creation cancelled.");
+      return;
+    }
+
+    const apiKey = await createApiKeyRequest(token, {
+      name: name.trim() || undefined,
+    });
+
+    if (apiKey) {
+      console.log(`\nAPI key created successfully!`);
+      console.log(`ID: ${apiKey.id}`);
+      console.log(`Key: ${apiKey.key}`);
+      console.log(`Name: ${apiKey.name || "(no name)"}`);
+      console.log(
+        "\nIMPORTANT: Save this key now. You won't be able to see it again!",
+      );
+    }
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      console.log("API key creation cancelled.");
+      return;
+    }
+    throw error;
   }
 }
 
