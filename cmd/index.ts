@@ -1,9 +1,7 @@
 import "dotenv/config";
 import process from "node:process";
-import { search } from "@inquirer/prompts";
+import { select } from "@inquirer/prompts";
 import {
-  availableCommandInputs,
-  resolveCommandInput,
   runCommand,
   visibleCommands,
 } from "./commands.js";
@@ -20,50 +18,32 @@ async function main() {
     try {
       const sessionRecord = await readSessionFile();
       const commands = visibleCommands(sessionRecord);
-      const availableInputs = availableCommandInputs(commands);
 
-      const choice = await search({
-        message: "Enter a command:",
-        source: async (term) => {
-          const normalizedTerm = (term ?? "").trim();
-          const results: { name: string; value: string }[] = [];
+      // Build choices with keyboard shortcuts
+      const choices = commands.map((command) => {
+        let name = command.description || command.name;
 
-          if (normalizedTerm) {
-            const exactMatch = availableInputs.includes(normalizedTerm);
-            results.push({
-              name: exactMatch ? normalizedTerm : `Run "${normalizedTerm}"`,
-              value: normalizedTerm,
-            });
-          }
+        // Add keyboard shortcut hints
+        if (command.name === "/story") {
+          name = "[s] Story - " + command.description;
+        } else if (command.name === "/memory") {
+          name = "[m] Memory - " + command.description;
+        } else if (command.name === "/admin") {
+          name = "[a] Admin - " + command.description;
+        } else if (command.name === "/exit") {
+          name = "[q] Quit - " + command.description;
+        }
 
-          const searchTerm = normalizedTerm.toLowerCase();
-          const filtered = searchTerm
-            ? availableInputs.filter((cmd) =>
-                cmd.toLowerCase().includes(searchTerm),
-              )
-            : availableInputs;
+        return {
+          name,
+          value: command.name,
+        };
+      });
 
-          for (const cmd of filtered) {
-            if (!normalizedTerm || cmd !== normalizedTerm) {
-              results.push({
-                name: cmd,
-                value: cmd,
-              });
-            }
-          }
-
-          return results;
-        },
-        validate: (value) => {
-          if (!value?.trim()) {
-            return "Command is required.";
-          }
-          const normalized = value.trim();
-          if (!resolveCommandInput(normalized, commands)) {
-            return `Unknown command. Expected one of: ${availableInputs.join(", ")}`;
-          }
-          return true;
-        },
+      const choice = await select({
+        message: "Select a command:",
+        choices,
+        pageSize: 10,
       });
 
       const result = await runCommand(choice, sessionRecord);
