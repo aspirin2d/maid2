@@ -138,6 +138,7 @@ async function buildLiveHandlerInput(): Promise<unknown> {
   const eventType = await eventSelectPrompt({
     message: "Choose event type",
     choices: [
+      { name: "Simple chat", value: "simple_chat" },
       { name: "User chat", value: "user_chat" },
       { name: "Bullet chat (弹幕)", value: "bullet_chat" },
       { name: "Program event", value: "program_event" },
@@ -157,6 +158,14 @@ async function buildLiveHandlerInput(): Promise<unknown> {
   if (eventType === "command_exit") {
     return "/exit";
   }
+  if (eventType === "simple_chat") {
+    const text = await input({
+      message: "Enter your message",
+      validate: requiredField("Message"),
+    });
+    return text;
+  }
+
   // Build event-specific data
   switch (eventType) {
     case "user_chat": {
