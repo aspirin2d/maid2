@@ -34,6 +34,88 @@ const outputSchema = z.object({
 });
 
 /**
+ * Remove markdown code fences from a string
+ * Handles ```json, ```, and trailing ``` markers
+ */
+function removeMarkdownCodeFences(text: string): string {
+  let trimmed = text.trim();
+
+  // Remove leading code fence
+  if (trimmed.startsWith('```json')) {
+    trimmed = trimmed.slice(7); // Remove ```json
+  } else if (trimmed.startsWith('```')) {
+    trimmed = trimmed.slice(3); // Remove ```
+  }
+
+  // Remove trailing code fence
+  if (trimmed.endsWith('```')) {
+    trimmed = trimmed.slice(0, -3); // Remove trailing ```
+  }
+
+  return trimmed.trim();
+}
+
+/**
+ * Result of parsing LLM response
+ */
+interface ParseResult {
+  /** Successfully parsed and validated output */
+  success: boolean;
+  /** Parsed output (only if success is true) */
+  data?: z.infer<typeof outputSchema>;
+  /** Cleaned response text (markdown fences removed) */
+  cleanedText: string;
+  /** Error message (only if success is false) */
+  error?: string;
+}
+
+/**
+ * Parse and validate LLM response against output schema
+ * @param rawResponse - Raw LLM response text (may contain markdown fences)
+ * @returns ParseResult with success status, data, and error info
+ */
+function parseLLMResponse(rawResponse: string): ParseResult {
+  // Step 1: Clean markdown fences
+  const cleanedText = removeMarkdownCodeFences(rawResponse);
+
+  if (cleanedText.length === 0) {
+    return {
+      success: false,
+      cleanedText: '',
+      error: 'Empty response after cleaning markdown fences',
+    };
+  }
+
+  // Step 2: Parse JSON
+  let jsonData: unknown;
+  try {
+    jsonData = JSON.parse(cleanedText);
+  } catch (error) {
+    return {
+      success: false,
+      cleanedText,
+      error: `JSON parse error: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  // Step 3: Validate against schema
+  try {
+    const validatedData = outputSchema.parse(jsonData);
+    return {
+      success: true,
+      data: validatedData,
+      cleanedText,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      cleanedText,
+      error: `Schema validation error: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/**
  * Metadata for the live handler
  * Defined once at the top level for use in both factory and registration
  */
@@ -86,12 +168,29 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
       // Extract user message from the normalized event
       const userContent = normalizedEvent ? extractEventText(normalizedEvent) : null;
 
+      // Parse and validate LLM response
+      const parseResult = parseLLMResponse(assistantResponse);
+
+      // Build metadata with parse result
+      const metadata: Record<string, any> = {};
+      if (parseResult.success && parseResult.data) {
+        metadata.parsedOutput = parseResult.data;
+      } else if (parseResult.error) {
+        console.error('Failed to parse LLM response:', parseResult.error);
+        metadata.parseError = parseResult.error;
+      }
+
+      // Determine message content:
+      // - Use validated parsed output (re-serialized) if available
+      // - Otherwise use cleaned text (markdown fences removed)
+      const messageContent = parseResult.success && parseResult.data
+        ? JSON.stringify(parseResult.data)
+        : (parseResult.cleanedText || undefined);
+
       return {
         userMessage: userContent ?? undefined,
-        assistantMessage:
-          assistantResponse.trim().length > 0
-            ? assistantResponse.trim()
-            : undefined,
+        assistantMessage: messageContent,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       };
     },
     getMetadata(): HandlerMetadata {
