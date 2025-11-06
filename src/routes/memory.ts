@@ -45,7 +45,7 @@ const updateMemorySchema = z.strictObject({
 });
 
 /**
- * GET /api/mem
+ * GET /api/v1/memories
  * List all memories for the authenticated user
  */
 memoryRoute.get("/", async (c) => {
@@ -61,7 +61,7 @@ memoryRoute.get("/", async (c) => {
 });
 
 /**
- * POST /api/mem/extract
+ * POST /api/v1/memories/extract
  * Extract memories from unextracted messages for the authenticated user
  */
 memoryRoute.post("/extract", async (c) => {
@@ -95,7 +95,7 @@ memoryRoute.post("/extract", async (c) => {
 });
 
 /**
- * POST /api/mem
+ * POST /api/v1/memories
  * Create a new memory for the authenticated user
  */
 memoryRoute.post("/", async (c) => {
@@ -131,7 +131,7 @@ memoryRoute.post("/", async (c) => {
 });
 
 /**
- * PUT /api/mem/:id
+ * PUT /api/v1/memories/:id
  * Update a specific memory by ID
  */
 memoryRoute.put("/:id", async (c) => {
@@ -191,7 +191,7 @@ memoryRoute.put("/:id", async (c) => {
 });
 
 /**
- * DELETE /api/mem/:id
+ * DELETE /api/v1/memories/:id
  * Delete a specific memory by ID
  */
 memoryRoute.delete("/:id", async (c) => {

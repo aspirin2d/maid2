@@ -230,7 +230,7 @@ async function promptAndEditMemory(
 
 async function fetchMemories(token: string): Promise<MemoryRecord[]> {
   const response = await apiFetch(
-    "/api/mem",
+    "/api/v1/memories",
     {
       method: "GET",
       headers: {
@@ -252,7 +252,7 @@ async function fetchMemories(token: string): Promise<MemoryRecord[]> {
 
 async function deleteMemoryRequest(token: string, memoryId: number) {
   const response = await apiFetch(
-    `/api/mem/${memoryId}`,
+    `/api/v1/memories/${memoryId}`,
     {
       method: "DELETE",
       headers: {
@@ -281,7 +281,7 @@ async function createMemoryRequest(
   },
 ): Promise<MemoryRecord | null> {
   const response = await apiFetch(
-    "/api/mem",
+    "/api/v1/memories",
     {
       method: "POST",
       headers: {
@@ -319,7 +319,7 @@ async function updateMemoryRequest(
   },
 ): Promise<MemoryRecord | null> {
   const response = await apiFetch(
-    `/api/mem/${memoryId}`,
+    `/api/v1/memories/${memoryId}`,
     {
       method: "PUT",
       headers: {
@@ -352,7 +352,7 @@ async function extractMemoriesRequest(token: string): Promise<{
   messagesExtracted: number;
 } | null> {
   const response = await apiFetch(
-    "/api/mem/extract",
+    "/api/v1/memories/extract",
     {
       method: "POST",
       headers: {

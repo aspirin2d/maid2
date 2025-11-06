@@ -139,7 +139,7 @@ async function createStoryFlow(token: string) {
 
 async function fetchStories(token: string): Promise<StoryRecord[]> {
   const response = await apiFetch(
-    "/api/s",
+    "/api/v1/stories",
     {
       method: "GET",
       headers: {
@@ -161,7 +161,7 @@ async function fetchStories(token: string): Promise<StoryRecord[]> {
 
 async function deleteStoryRequest(token: string, storyId: number) {
   const response = await apiFetch(
-    `/api/s/${storyId}`,
+    `/api/v1/stories/${storyId}`,
     {
       method: "DELETE",
       headers: {
@@ -182,7 +182,7 @@ async function deleteStoryRequest(token: string, storyId: number) {
 
 async function clearStoryMessagesRequest(token: string, storyId: number) {
   const response = await apiFetch(
-    `/api/s/${storyId}/messages`,
+    `/api/v1/stories/${storyId}/messages`,
     {
       method: "DELETE",
       headers: {
@@ -208,7 +208,7 @@ async function updateStoryRequest(
   name: string,
 ) {
   const response = await apiFetch(
-    `/api/s/${storyId}`,
+    `/api/v1/stories/${storyId}`,
     {
       method: "PATCH",
       headers: {
@@ -237,7 +237,7 @@ async function createStoryRequest(
   handler: string,
 ) {
   const response = await apiFetch(
-    "/api/s",
+    "/api/v1/stories",
     {
       method: "POST",
       headers: {
@@ -505,7 +505,7 @@ async function streamStoryConversation({
   input: payload,
 }: StreamArgs) {
   const response = await apiFetch(
-    `/api/s/${storyId}/stream`,
+    `/api/v1/stories/${storyId}/messages`,
     {
       method: "POST",
       headers: {
@@ -622,13 +622,8 @@ async function fetchHandlers(
   token: string,
   storyId?: number,
 ): Promise<StoryHandlerInfo[]> {
-  const endpoint =
-    typeof storyId === "number"
-      ? `/api/s/${storyId}/handlers`
-      : "/api/s/handlers";
-
   const response = await apiFetch(
-    endpoint,
+    "/api/v1/handlers",
     {
       method: "GET",
       headers: {
@@ -656,7 +651,7 @@ async function fetchHandlers(
 
 async function fetchStoryDetails(token: string, storyId: number) {
   const response = await apiFetch(
-    `/api/s/${storyId}`,
+    `/api/v1/stories/${storyId}`,
     {
       method: "GET",
       headers: {
