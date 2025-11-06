@@ -1,11 +1,10 @@
 import "dotenv/config";
 import process from "node:process";
-import { select } from "@inquirer/prompts";
 import {
   runCommand,
   visibleCommands,
 } from "./commands.js";
-import { isPromptAbortError, readSessionFile } from "./core.js";
+import { isPromptAbortError, readSessionFile, mainMenuPrompt } from "./core.js";
 import { printWelcomeMessage } from "./lib.js";
 
 async function main() {
@@ -22,28 +21,33 @@ async function main() {
       // Build choices with keyboard shortcuts
       const choices = commands.map((command) => {
         let name = command.description || command.name;
+        let shortcut: string | undefined;
 
-        // Add keyboard shortcut hints
+        // Add keyboard shortcut hints and shortcuts
         if (command.name === "/story") {
           name = "[s] Story - " + command.description;
+          shortcut = "s";
         } else if (command.name === "/memory") {
           name = "[m] Memory - " + command.description;
+          shortcut = "m";
         } else if (command.name === "/admin") {
           name = "[a] Admin - " + command.description;
+          shortcut = "a";
         } else if (command.name === "/exit") {
           name = "[q] Quit - " + command.description;
+          shortcut = "q";
         }
 
         return {
           name,
           value: command.name,
+          shortcut,
         };
       });
 
-      const choice = await select({
+      const choice = await mainMenuPrompt({
         message: "Select a command:",
         choices,
-        pageSize: 10,
       });
 
       const result = await runCommand(choice, sessionRecord);

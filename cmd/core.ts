@@ -101,6 +101,12 @@ async function executeWithSession(
 
 type Choice<T = any> = { name: string; value: T };
 
+type ChoiceWithShortcut<T = any> = {
+  name: string;
+  value: T;
+  shortcut?: string;
+};
+
 type MenuResult<T = any> =
   | { action: "open"; item: Choice<T> }
   | { action: "edit"; item: Choice<T> }
@@ -213,11 +219,81 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
 const menuPrompt = <T>(config: MenuPromptConfig<T>) =>
   rawMenuPrompt(config as MenuPromptConfig<any>) as Promise<MenuResult<T>>;
 
+// Main menu prompt with keyboard shortcuts
+export interface MainMenuPromptConfig<T = any> {
+  message?: string;
+  choices: ChoiceWithShortcut<T>[];
+}
+
+const rawMainMenuPrompt = createPrompt<T, MainMenuPromptConfig<any>>(
+  (config, done) => {
+    const prefix = usePrefix({});
+    const [cursor, setCursor] = useState(0);
+
+    const clamp = (n: number) =>
+      Math.max(0, Math.min(n, config.choices.length - 1));
+
+    // Build shortcut map for quick lookup
+    const shortcutMap = new Map<string, number>();
+    config.choices.forEach((choice, index) => {
+      if (choice.shortcut) {
+        shortcutMap.set(choice.shortcut.toLowerCase(), index);
+      }
+    });
+
+    useKeypress((key) => {
+      if (isDownKey(key)) {
+        setCursor(clamp(cursor + 1));
+        return;
+      }
+      if (isUpKey(key)) {
+        setCursor(clamp(cursor - 1));
+        return;
+      }
+
+      if (key.ctrl && key.name === "c") {
+        throw new Error("User cancelled");
+      }
+
+      const k = (key.name || "").toLowerCase();
+
+      // Check for keyboard shortcuts first
+      if (shortcutMap.has(k)) {
+        const index = shortcutMap.get(k)!;
+        done(config.choices[index].value);
+        return;
+      }
+
+      // Enter key selects current item
+      if (isEnterKey(key)) {
+        const currentChoice = config.choices[cursor];
+        if (currentChoice) {
+          done(currentChoice.value);
+        }
+        return;
+      }
+    });
+
+    const message = config.message ?? "Select a command:";
+    const lines = config.choices.map((choice, index) => {
+      const caret = index === cursor ? "❯" : " ";
+      return `${caret} ${choice.name}`;
+    });
+
+    const help = "↑/↓ move   Enter=select   or press shortcut key";
+
+    return [`${prefix} ${message}`, ...lines, "", help].join("\n");
+  },
+);
+
+const mainMenuPrompt = <T>(config: MainMenuPromptConfig<T>) =>
+  rawMainMenuPrompt(config as MainMenuPromptConfig<any>) as Promise<T>;
+
 function isPromptAbortError(error: unknown): error is Error {
   return error instanceof Error && error.name === "ExitPromptError";
 }
 
-export type { Choice, MenuResult };
+export type { Choice, ChoiceWithShortcut, MenuResult };
 export {
   // Re-export constants for backward compatibility
   APP_BASE_URL,
@@ -234,4 +310,5 @@ export {
   // Custom prompts
   isPromptAbortError,
   menuPrompt,
+  mainMenuPrompt,
 };
