@@ -7,6 +7,15 @@
 
 import { input, select } from "@inquirer/prompts";
 import { requiredField } from "./lib.js";
+import {
+  createPrompt,
+  useState,
+  useKeypress,
+  usePrefix,
+  isEnterKey,
+  isUpKey,
+  isDownKey,
+} from "@inquirer/core";
 
 // ============================================================================
 // Type Definitions
@@ -25,6 +34,96 @@ type HandlerInputBuilder = () => Promise<unknown>;
  */
 type HandlerOutputFormatter = (payload: string) => boolean;
 
+/**
+ * Simple choice for event selection
+ */
+interface EventChoice<T> {
+  name: string;
+  value: T;
+}
+
+/**
+ * Config for event selection prompt
+ */
+interface EventSelectConfig<T> {
+  message: string;
+  choices: EventChoice<T>[];
+}
+
+// ============================================================================
+// Custom Event Selection Prompt
+// ============================================================================
+
+/**
+ * Custom prompt for event selection with number key shortcuts
+ * Supports 1-9 keys for direct selection and 0 for the 10th item
+ */
+const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
+  (config, done) => {
+    const prefix = usePrefix({});
+    const [cursor, setCursor] = useState(0);
+
+    const clamp = (n: number) =>
+      Math.max(0, Math.min(n, config.choices.length - 1));
+
+    useKeypress((key, rl) => {
+      if (isUpKey(key)) {
+        setCursor(clamp(cursor - 1));
+        return;
+      }
+      if (isDownKey(key)) {
+        setCursor(clamp(cursor + 1));
+        return;
+      }
+
+      const k = (key.name || "").toLowerCase();
+
+      // Handle number key selection (1-9 and 0 for 10)
+      if (k >= "0" && k <= "9") {
+        const num = k === "0" ? 10 : parseInt(k, 10);
+        const targetIndex = num - 1;
+        if (targetIndex >= 0 && targetIndex < config.choices.length) {
+          done(config.choices[targetIndex].value);
+        }
+        return;
+      }
+
+      if (isEnterKey(key)) {
+        const choice = config.choices[cursor];
+        if (choice) {
+          done(choice.value);
+        }
+        return;
+      }
+
+      if (k === "escape") {
+        rl.close();
+        return;
+      }
+    });
+
+    const message = config.message;
+    const lines = config.choices.map((choice, index) => {
+      const caret = index === cursor ? "❯" : " ";
+      const indexNum = index + 1;
+      return `${caret} [${indexNum}] ${choice.name}`;
+    });
+
+    const help = `↑/↓ move   1-9/0=select   Enter=confirm   Esc=cancel`;
+
+    return [`${prefix} ${message}`, ...lines, "", help].join("\n");
+  },
+);
+
+/**
+ * Event selection prompt with type safety
+ */
+function eventSelectPrompt<T extends string>(
+  config: EventSelectConfig<T>,
+): Promise<T> & { cancel: () => void } {
+  return rawEventSelectPrompt(config as EventSelectConfig<string>) as unknown as Promise<T> & { cancel: () => void };
+}
+
 // ============================================================================
 // Live Handler - Input Builder
 // ============================================================================
@@ -34,30 +133,20 @@ type HandlerOutputFormatter = (payload: string) => boolean;
  * Provides an interactive menu to create various event types
  */
 async function buildLiveHandlerInput(): Promise<unknown> {
-  const eventType = await select({
+  const eventType = await eventSelectPrompt({
     message: "Choose event type",
     choices: [
-      { name: "Clear story messages (/clear)", value: "command_clear" },
+      { name: "Simple text", value: "simple_text" },
+      { name: "User chat", value: "user_chat" },
+      { name: "Bullet chat (弹幕)", value: "bullet_chat" },
+      { name: "Program event", value: "program_event" },
+      { name: "Gift event", value: "gift_event" },
+      { name: "User interaction", value: "user_interaction" },
+      { name: "System event", value: "system_event" },
+      { name: "Emotion event", value: "emotion_event" },
+      { name: "Clear story (/clear)", value: "command_clear" },
       { name: "Exit chat (/exit)", value: "command_exit" },
-      { name: "Simple text (just type a message)", value: "simple_text" },
-      { name: "User chat (regular conversation)", value: "user_chat" },
-      { name: "Bullet chat (danmaku/弹幕)", value: "bullet_chat" },
-      {
-        name: "Program event (start/finish segment)",
-        value: "program_event",
-      },
-      { name: "Gift event (donations/gifts)", value: "gift_event" },
-      {
-        name: "User interaction (follow/subscribe)",
-        value: "user_interaction",
-      },
-      {
-        name: "System event (technical notification)",
-        value: "system_event",
-      },
-      { name: "Emotion event (mood change)", value: "emotion_event" },
     ],
-    default: "simple_text",
   });
 
   // Simple text - just return the text directly (backward compatible)
