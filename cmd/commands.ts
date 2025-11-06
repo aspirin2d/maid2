@@ -93,7 +93,7 @@ const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "/exit",
-    aliases: ["/e"],
+    aliases: ["/e", "/q"],
     description: "Close this CLI",
     handler: async (): Promise<CommandResult> => ({ exit: true }),
   },
