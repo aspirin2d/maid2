@@ -154,6 +154,16 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
       const k = (key.name || "").toLowerCase();
       const disabledActions = config.disabledActions || [];
 
+      // Handle number key selection (1-9 and 0 for 10)
+      if (k >= "0" && k <= "9") {
+        const num = k === "0" ? 10 : parseInt(k, 10);
+        const targetIndex = num - 1;
+        if (targetIndex >= 0 && targetIndex < config.choices.length) {
+          done({ action: "open", item: config.choices[targetIndex] });
+        }
+        return;
+      }
+
       if (k === "a" || k === "c") {
         if (!disabledActions.includes("create")) {
           done({ action: "create", item: currentChoice });
@@ -191,12 +201,13 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
     const message = config.message ?? "Select an item";
     const lines = config.choices.map((choice, index) => {
       const caret = index === cursor ? "❯" : " ";
-      return `${caret} ${choice.name}`;
+      const indexNum = index + 1;
+      return `${caret} [${indexNum}] ${choice.name}`;
     });
 
     const disabledActions = config.disabledActions || [];
     const enterLabel = config.enterLabel ?? "chat";
-    const helpParts = [`↑/↓ move`, `Enter=${enterLabel}`];
+    const helpParts = [`↑/↓ move`, `1-9/0=select`, `Enter=${enterLabel}`];
     if (!disabledActions.includes("edit")) {
       helpParts.push("e=edit");
     }
