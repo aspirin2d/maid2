@@ -271,7 +271,7 @@ async function storyMenuPrompt(
     menu = await menuPrompt<StoryRecord>({
       message: "Stories",
       choices: stories.map((story) => ({
-        name: `[${story.id}] ${story.name}`,
+        name: `${story.name} (id: ${story.id})`,
         value: story,
       })),
       disabledActions: ["extract"],
@@ -751,7 +751,7 @@ async function selectStoryInteractively(
     return await select<StoryRecord>({
       message,
       choices: stories.map((story) => ({
-        name: `[${story.id}] ${story.name}`,
+        name: `${story.name} (id: ${story.id})`,
         value: story,
       })),
     });
