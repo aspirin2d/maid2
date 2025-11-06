@@ -73,6 +73,8 @@ export async function buildPrompt(
     buildChatHistory(ctx, messageLimit),
   ]);
 
+  console.log("mem:", memoryContext);
+
   // Add memory context if available
   if (memoryContext) {
     prompt.push(memoryContext);

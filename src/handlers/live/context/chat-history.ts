@@ -17,7 +17,9 @@ function parseAssistantSpeech(content: string): string | null {
 
     const speeches = parsed.clips
       .map((clip: any) => clip?.speech)
-      .filter((speech: any) => typeof speech === "string" && speech.trim().length > 0)
+      .filter(
+        (speech: any) => typeof speech === "string" && speech.trim().length > 0,
+      )
       .join("");
 
     return speeches.length > 0 ? speeches : null;
@@ -52,7 +54,9 @@ export async function buildChatHistory(
   }
 
   for (const row of chatHistory) {
-    const timeInfo = row.createdAt ? ` [${dayjs(row.createdAt).fromNow()}]` : "";
+    const timeInfo = row.createdAt
+      ? ` [${dayjs(row.createdAt).fromNow()}]`
+      : "";
 
     if (row.role === "user") {
       lines.push(`用户${timeInfo}: ${row.content}`);
