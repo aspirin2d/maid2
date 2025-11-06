@@ -127,7 +127,7 @@ export async function bulkInsertMessages(
       content: msg.content.trim(),
     }));
 
-  console.log("messages:", validMessages);
+  // console.log("messages:", validMessages);
 
   // Batch insert all messages at once (much faster than sequential inserts)
   if (validMessages.length > 0) {
