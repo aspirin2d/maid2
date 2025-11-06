@@ -24,7 +24,16 @@ async function main() {
         let shortcut: string | undefined;
 
         // Add keyboard shortcut hints and shortcuts
-        if (command.name === "/story") {
+        if (command.name === "/login") {
+          name = "[l] Login - " + command.description;
+          shortcut = "l";
+        } else if (command.name === "/logout") {
+          name = "[l] Logout - " + command.description;
+          shortcut = "l";
+        } else if (command.name === "/signup") {
+          name = "[s] Signup - " + command.description;
+          shortcut = "s";
+        } else if (command.name === "/story") {
           name = "[s] Story - " + command.description;
           shortcut = "s";
         } else if (command.name === "/memory") {
