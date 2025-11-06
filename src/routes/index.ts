@@ -5,6 +5,7 @@ import messagesRoute from "./message.js";
 import memoryRoute from "./memory.js";
 import adminRoute from "./admin.js";
 import handlersRoute from "./handler.js";
+import scheduleRoute from "./schedule.js";
 
 export const registerRoutes = (app: Hono<{ Variables: AppVariables }>) => {
   app.route("/api/v1/stories", storiesRoute);
@@ -12,4 +13,5 @@ export const registerRoutes = (app: Hono<{ Variables: AppVariables }>) => {
   app.route("/api/v1/memories", memoryRoute);
   app.route("/api/v1/admin", adminRoute);
   app.route("/api/v1/handlers", handlersRoute);
+  app.route("/api/v1/schedule", scheduleRoute);
 };

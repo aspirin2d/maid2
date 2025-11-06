@@ -5,6 +5,7 @@ import type { AppVariables } from "./types.js";
 import { registerRoutes } from "./routes/index.js";
 import { env } from "./env.js";
 import { initializeDefaultAdmin } from "./admin.js";
+import scheduler from "./scheduler.js";
 
 const app = new Hono<{
   Variables: AppVariables;
@@ -42,6 +43,28 @@ app.get("/", (c) => {
 
 // Initialize default admin user before starting server
 await initializeDefaultAdmin();
+
+// Initialize cron scheduler
+try {
+  scheduler.loadConfig("./cron-jobs.json");
+  scheduler.initializeJobs();
+  console.log("[Scheduler] Cron jobs initialized successfully");
+} catch (error) {
+  console.error("[Scheduler] Failed to initialize cron jobs:", error);
+}
+
+// Graceful shutdown
+process.on("SIGINT", () => {
+  console.log("\n[Server] Shutting down gracefully...");
+  scheduler.stopAll();
+  process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+  console.log("\n[Server] Shutting down gracefully...");
+  scheduler.stopAll();
+  process.exit(0);
+});
 
 serve(
   {

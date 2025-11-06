@@ -1,0 +1,25 @@
+{
+  "jobs": [
+    {
+      "name": "daily-cleanup",
+      "schedule": "0 0 * * *",
+      "description": "Daily cleanup task that runs at midnight",
+      "enabled": true,
+      "timezone": "UTC"
+    },
+    {
+      "name": "hourly-sync",
+      "schedule": "0 * * * *",
+      "description": "Hourly sync task",
+      "enabled": true,
+      "timezone": "UTC"
+    },
+    {
+      "name": "example-disabled",
+      "schedule": "*/5 * * * *",
+      "description": "Example disabled job",
+      "enabled": false,
+      "timezone": "UTC"
+    }
+  ]
+}

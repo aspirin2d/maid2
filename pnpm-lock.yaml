@@ -26,6 +26,9 @@ importers:
       hono:
         specifier: ^4.10.4
         version: 4.10.4
+      node-cron:
+        specifier: ^4.2.1
+        version: 4.2.1
       ollama:
         specifier: ^0.6.2
         version: 0.6.2
@@ -48,6 +51,9 @@ importers:
       '@types/node':
         specifier: ^20.19.24
         version: 20.19.24
+      '@types/node-cron':
+        specifier: ^3.0.11
+        version: 3.0.11
       '@types/pg':
         specifier: ^8.15.6
         version: 8.15.6
@@ -589,6 +595,9 @@ packages:
   '@types/mute-stream@0.0.4':
     resolution: {integrity: sha512-CPM9nzrCPPJHQNA9keH9CVkVI+WR5kMa+7XEs5jcGQ0VoAGnLv242w8lIVgwAEfmE4oufJRaTc9PNLQl0ioAow==}
 
+  '@types/node-cron@3.0.11':
+    resolution: {integrity: sha512-0ikrnug3/IyneSHqCBeslAhlK2aBfYek1fGo4bP4QnZPmiqSGRK+Oy7ZMisLWkesffJvQ1cqAcBnJC+8+nxIAg==}
+
   '@types/node@20.19.24':
     resolution: {integrity: sha512-FE5u0ezmi6y9OZEzlJfg37mqqf6ZDSF2V/NLjUyGrR9uTZ7Sb9F7bLNZ03S4XVUNRWGA7Ck4c1kK+YnuWjl+DA==}
 
@@ -840,6 +849,10 @@ packages:
   nanostores@1.0.1:
     resolution: {integrity: sha512-kNZ9xnoJYKg/AfxjrVL4SS0fKX++4awQReGqWnwTRHxeHGZ1FJFVgTqr/eMrNQdp0Tz7M7tG/TDaX8QfHDwVCw==}
     engines: {node: ^20.0.0 || >=22.0.0}
+
+  node-cron@4.2.1:
+    resolution: {integrity: sha512-lgimEHPE/QDgFlywTd8yTR61ptugX3Qer29efeyWw2rv259HtGBNn1vZVmp8lB9uo9wC0t/AT4iGqXxia+CJFg==}
+    engines: {node: '>=6.0.0'}
 
   ollama@0.6.2:
     resolution: {integrity: sha512-VcPZpBuz3kdoJIcyWpiDS1MSDSZKyQPM6f9wi405vdLOB5yZWiQ+m7NSTrYsntQyCp/s/Yy0quKiYerhq7Liog==}
@@ -1451,6 +1464,8 @@ snapshots:
     dependencies:
       '@types/node': 20.19.24
 
+  '@types/node-cron@3.0.11': {}
+
   '@types/node@20.19.24':
     dependencies:
       undici-types: 6.21.0
@@ -1634,6 +1649,8 @@ snapshots:
   mute-stream@2.0.0: {}
 
   nanostores@1.0.1: {}
+
+  node-cron@4.2.1: {}
 
   ollama@0.6.2:
     dependencies:
