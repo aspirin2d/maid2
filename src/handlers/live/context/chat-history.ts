@@ -60,6 +60,9 @@ export async function buildChatHistory(
       const speech = parseAssistantSpeech(row.content);
       if (speech) {
         lines.push(`VTuber${timeInfo}: ${speech}`);
+      } else {
+        // Fallback: show raw content if speech extraction fails
+        lines.push(`VTuber${timeInfo}: ${row.content}`);
       }
     }
   }
