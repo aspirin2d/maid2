@@ -81,7 +81,10 @@ async function fetchSession(token: string) {
 
 async function executeWithSession(
   sessionRecord: SessionRecord | null,
-  action: (token: string, session: SessionRecord) => Promise<CommandResult | void>,
+  action: (
+    token: string,
+    session: SessionRecord,
+  ) => Promise<CommandResult | void>,
   options?: { missingSessionMessage?: string },
 ) {
   if (!sessionRecord?.token) {
@@ -206,7 +209,7 @@ const rawMenuPrompt = createPrompt<MenuResult<any>, MenuPromptConfig<any>>(
     });
 
     const disabledActions = config.disabledActions || [];
-    const enterLabel = config.enterLabel ?? "chat";
+    const enterLabel = config.enterLabel ?? "select";
     const helpParts = [`↑/↓ move`, `1-9/0=select`, `Enter=${enterLabel}`];
     if (!disabledActions.includes("edit")) {
       helpParts.push("e=edit");

@@ -121,7 +121,9 @@ const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
 function eventSelectPrompt<T extends string>(
   config: EventSelectConfig<T>,
 ): Promise<T> & { cancel: () => void } {
-  return rawEventSelectPrompt(config as EventSelectConfig<string>) as unknown as Promise<T> & { cancel: () => void };
+  return rawEventSelectPrompt(
+    config as EventSelectConfig<string>,
+  ) as unknown as Promise<T> & { cancel: () => void };
 }
 
 // ============================================================================
@@ -136,7 +138,6 @@ async function buildLiveHandlerInput(): Promise<unknown> {
   const eventType = await eventSelectPrompt({
     message: "Choose event type",
     choices: [
-      { name: "Simple text", value: "simple_text" },
       { name: "User chat", value: "user_chat" },
       { name: "Bullet chat (弹幕)", value: "bullet_chat" },
       { name: "Program event", value: "program_event" },
@@ -156,14 +157,6 @@ async function buildLiveHandlerInput(): Promise<unknown> {
   if (eventType === "command_exit") {
     return "/exit";
   }
-  if (eventType === "simple_text") {
-    const text = await input({
-      message: "Enter your message",
-      validate: requiredField("Message"),
-    });
-    return text;
-  }
-
   // Build event-specific data
   switch (eventType) {
     case "user_chat": {

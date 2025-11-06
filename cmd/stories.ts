@@ -371,14 +371,20 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
       if (command === "/clear") {
         try {
           const confirmed = await confirm({
-            message: "Are you sure you want to clear all messages from this story?",
+            message:
+              "Are you sure you want to clear all messages from this story?",
             default: false,
           });
 
           if (confirmed) {
-            const deletedCount = await clearStoryMessagesRequest(token, storyRecord.id);
+            const deletedCount = await clearStoryMessagesRequest(
+              token,
+              storyRecord.id,
+            );
             if (deletedCount !== null) {
-              console.log(`Cleared ${deletedCount} message(s) from this story.`);
+              console.log(
+                `Cleared ${deletedCount} message(s) from this story.`,
+              );
             }
           } else {
             console.log("Clear cancelled.");
@@ -413,9 +419,10 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
     }
 
     // Display user input
-    const displayMessage = typeof userInput === "string"
-      ? userInput
-      : JSON.stringify(userInput, null, 2);
+    const displayMessage =
+      typeof userInput === "string"
+        ? userInput
+        : JSON.stringify(userInput, null, 2);
     console.log(`\nYou: ${displayMessage}`);
 
     // Stream the conversation
@@ -922,7 +929,9 @@ async function listStoryHandlersCommand(token: string, args: string[]) {
   }
 
   if (contextStory) {
-    console.log(`Handlers for story ${contextStory.id} (${contextStory.name}):`);
+    console.log(
+      `Handlers for story ${contextStory.id} (${contextStory.name}):`,
+    );
   } else {
     console.log("Available story handlers:");
   }
