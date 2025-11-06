@@ -92,25 +92,27 @@ export async function streamWithAdapter(c: Context, options: StreamingOptions) {
       // Handler lifecycle: finish - returns messages to persist
       const result = await handler.onFinish();
 
-      // Persistence layer - decoupled from handler logic
-      const messages = [];
+      // Persistence layer - save user input first, then response
+      // Save user message first
       if (result.userMessage) {
-        messages.push({
-          storyId,
-          role: "user" as const,
-          content: result.userMessage,
-        });
-      }
-      if (result.assistantMessage) {
-        messages.push({
-          storyId,
-          role: "assistant" as const,
-          content: result.assistantMessage,
-        });
+        await bulkInsertMessages([
+          {
+            storyId,
+            role: "user" as const,
+            content: result.userMessage,
+          },
+        ]);
       }
 
-      if (messages.length > 0) {
-        await bulkInsertMessages(messages);
+      // Then save assistant message
+      if (result.assistantMessage) {
+        await bulkInsertMessages([
+          {
+            storyId,
+            role: "assistant" as const,
+            content: result.assistantMessage,
+          },
+        ]);
       }
 
       // Send finish event
