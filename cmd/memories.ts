@@ -398,11 +398,11 @@ async function memoryMenuPrompt(
         const content = memory.content || "(empty)";
         const preview =
           content.length > 60 ? content.substring(0, 60) + "..." : content;
-        const category = memory.category ? `[${memory.category}]` : "";
+        const category = memory.category ? `[${memory.category}] ` : "";
         const timestamp = formatTimestamp(memory.createdAt);
 
         return {
-          name: `[${memory.id}] ${category} ${preview} - ${timestamp}`,
+          name: `${category}${preview} (id: ${memory.id})`,
           value: memory,
         };
       }),
@@ -518,7 +518,7 @@ async function selectMemoryInteractively(
             : memory.content || "(empty)";
         const category = memory.category ? `[${memory.category}] ` : "";
         return {
-          name: `[${memory.id}] ${category}${preview}`,
+          name: `${category}${preview} (id: ${memory.id})`,
           value: memory,
         };
       }),

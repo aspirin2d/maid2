@@ -236,7 +236,7 @@ export interface MainMenuPromptConfig<T = any> {
   choices: ChoiceWithShortcut<T>[];
 }
 
-const rawMainMenuPrompt = createPrompt<T, MainMenuPromptConfig<any>>(
+const rawMainMenuPrompt = createPrompt<any, MainMenuPromptConfig<any>>(
   (config, done) => {
     const prefix = usePrefix({});
     const [cursor, setCursor] = useState(0);
