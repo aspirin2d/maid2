@@ -92,27 +92,32 @@ export async function streamWithAdapter(c: Context, options: StreamingOptions) {
       // Handler lifecycle: finish - returns messages to persist
       const result = await handler.onFinish();
 
-      // Persistence layer - save user input first, then response
-      // Save user message first
+      // Persistence layer - save in single query with guaranteed order
+      // PostgreSQL preserves array order when assigning serial IDs:
+      // First element gets ID N, second gets ID N+1, etc.
+      const messages = [];
+
+      // Add user message first (will get lower ID)
       if (result.userMessage) {
-        await bulkInsertMessages([
-          {
-            storyId,
-            role: "user" as const,
-            content: result.userMessage,
-          },
-        ]);
+        messages.push({
+          storyId,
+          role: "user" as const,
+          content: result.userMessage,
+        });
       }
 
-      // Then save assistant message
+      // Add assistant message second (will get higher ID)
       if (result.assistantMessage) {
-        await bulkInsertMessages([
-          {
-            storyId,
-            role: "assistant" as const,
-            content: result.assistantMessage,
-          },
-        ]);
+        messages.push({
+          storyId,
+          role: "assistant" as const,
+          content: result.assistantMessage,
+        });
+      }
+
+      // Single INSERT with multiple rows preserves order
+      if (messages.length > 0) {
+        await bulkInsertMessages(messages);
       }
 
       // Send finish event
