@@ -33,14 +33,14 @@ export async function getMessagesByStory(
       })
       .from(message)
       .where(eq(message.storyId, storyId))
-      .orderBy(desc(message.createdAt))
+      .orderBy(desc(message.id))
       .limit(options.lastN);
 
     // Reverse to get chronological order (oldest to newest)
     return recentMessages.reverse();
   }
 
-  const orderedQuery = baseQuery.orderBy(asc(message.createdAt));
+  const orderedQuery = baseQuery.orderBy(asc(message.id));
 
   const limitedQuery =
     options?.limit !== undefined
@@ -97,9 +97,7 @@ export async function getMessagesByUser(
     .orderBy(asc(message.createdAt));
 
   const limitedQuery =
-    options?.limit !== undefined
-      ? baseQuery.limit(options.limit)
-      : baseQuery;
+    options?.limit !== undefined ? baseQuery.limit(options.limit) : baseQuery;
 
   const finalQuery =
     options?.offset !== undefined
@@ -128,6 +126,8 @@ export async function bulkInsertMessages(
       role: msg.role,
       content: msg.content.trim(),
     }));
+
+  console.log("messages:", validMessages);
 
   // Batch insert all messages at once (much faster than sequential inserts)
   if (validMessages.length > 0) {
