@@ -17,8 +17,9 @@ export const OLLAMA_EMBEDDING_MODEL =
   env.OLLAMA_EMBEDDING_MODEL ?? "qwen3-embedding";
 export const DASHSCOPE_EMBEDDING_MODEL =
   env.DASHSCOPE_EMBEDDING_MODEL ?? "text-embedding-v4";
-export const DASHSCOPE_BASE_URL =
-  env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/api/v1";
+export const DASHSCOPE_EMBEDDING_URL =
+  env.DASHSCOPE_EMBEDDING_URL ||
+  "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding";
 
 export const OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
 
@@ -70,7 +71,7 @@ async function callDashscopeEmbedding(
   }
 
   // Dashscope API endpoint
-  const endpoint = `${DASHSCOPE_BASE_URL}/services/embeddings/text-embedding/text-embedding`;
+  const endpoint = `${DASHSCOPE_EMBEDDING_URL}`;
 
   // Build request body with optional parameters
   const requestBody: any = {
@@ -80,7 +81,6 @@ async function callDashscopeEmbedding(
     },
     parameters: {
       dimension: dims,
-      output_type: "dense",
     },
   };
 
@@ -105,9 +105,7 @@ async function callDashscopeEmbedding(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(
-      `Dashscope API error (${response.status}): ${errorText}`,
-    );
+    throw new Error(`Dashscope API error (${response.status}): ${errorText}`);
   }
 
   const data = await response.json();
@@ -122,9 +120,7 @@ async function callDashscopeEmbedding(
 
   // Sort by text_index to maintain order and extract embeddings
   const embeddings = data.output.embeddings
-    .sort(
-      (a: any, b: any) => (a.text_index || 0) - (b.text_index || 0),
-    )
+    .sort((a: any, b: any) => (a.text_index || 0) - (b.text_index || 0))
     .map((item: any) => item.embedding);
 
   return embeddings;
@@ -159,7 +155,11 @@ export async function embedTexts(
     // Process in batches of 10
     for (let i = 0; i < texts.length; i += BATCH_SIZE) {
       const batch = texts.slice(i, i + BATCH_SIZE);
-      const batchEmbeddings = await callDashscopeEmbedding(batch, dims, options);
+      const batchEmbeddings = await callDashscopeEmbedding(
+        batch,
+        dims,
+        options,
+      );
       allEmbeddings.push(...batchEmbeddings);
     }
 
