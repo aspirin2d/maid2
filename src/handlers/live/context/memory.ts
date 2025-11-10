@@ -19,8 +19,8 @@ export async function buildMemoryContext(
   ctx: StoryContext,
   config?: HandlerConfig,
 ): Promise<string> {
-  // Skip memory retrieval if no search text or provider
-  if (!request || !ctx.provider) {
+  // Skip memory retrieval if no search text
+  if (!request) {
     return "";
   }
 
@@ -29,8 +29,8 @@ export async function buildMemoryContext(
     const topK = (config?.memoryTopK as number | undefined) ?? 5;
     const minSimilarity = (config?.memoryMinSimilarity as number | undefined) ?? 0.5;
 
-    // Generate embedding for semantic search
-    const [queryEmbedding] = await embedTexts(ctx.provider, [request]);
+    // Generate embedding for semantic search using Dashscope (the only embedding provider)
+    const [queryEmbedding] = await embedTexts("dashscope", [request]);
 
     // Search for similar memories
     const memories = await searchSimilarMemories(queryEmbedding, {

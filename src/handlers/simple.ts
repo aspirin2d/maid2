@@ -65,10 +65,10 @@ const renderPrompt = async (
 
   // Retrieve relevant memories for context
   const request = extractRequestText(input);
-  if (request && ctx.provider) {
+  if (request) {
     try {
-      // Generate embedding for the current request
-      const [queryEmbedding] = await embedTexts(ctx.provider, [request]);
+      // Generate embedding for the current request using Dashscope (the only embedding provider)
+      const [queryEmbedding] = await embedTexts("dashscope", [request]);
 
       // Search for similar memories (top 5 most relevant)
       const memories = await searchSimilarMemories(queryEmbedding, {

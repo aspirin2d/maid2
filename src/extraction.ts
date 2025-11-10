@@ -76,9 +76,9 @@ export async function extractMemoriesForUser(
   }
 
   // Step 3: Prepare similarity context (with unified IDs: 1, 2, 3...)
-  // Generate embeddings for all facts
+  // Generate embeddings for all facts using Dashscope (the only embedding provider)
   const factTexts = parsedFacts.facts.map((fact) => fact.text);
-  const factEmbeddings = await embedTexts(provider, factTexts);
+  const factEmbeddings = await embedTexts("dashscope", factTexts);
 
   // Search for similar memories for each fact
   const similarMemoriesResults = await bulkSearchSimilarMemories(
@@ -157,7 +157,8 @@ export async function extractMemoriesForUser(
           const fact = parsedFacts.facts[factIndex];
 
           // Insert new memory with the fact's text (or decision text if provided)
-          await insertMemories(provider, [
+          // Always use "dashscope" for embeddings (the only embedding provider)
+          await insertMemories("dashscope", [
             {
               userId: userId,
               content: decision.text || fact.text,
@@ -181,8 +182,8 @@ export async function extractMemoriesForUser(
           // We'll use the first fact in the list for metadata (simplified approach)
           const fact = parsedFacts.facts[0]; // TODO: Improve this mapping logic
 
-          // Generate embedding for updated content
-          const [updatedEmbedding] = await embedTexts(provider, [
+          // Generate embedding for updated content using Dashscope (the only embedding provider)
+          const [updatedEmbedding] = await embedTexts("dashscope", [
             decision.text,
           ]);
 

@@ -45,20 +45,18 @@ const envSchema = z.object({
     ),
   DB_NAME: z.string().min(1, "DB_NAME is required"),
 
-  // Optional: LLM providers
+  // Optional: LLM providers (OpenAI and Ollama for chat only)
   OPENAI_API_KEY: z.string().optional(),
   OLLAMA_BASE_URL: z.url().optional().or(z.literal("")),
   OLLAMA_KEEP_ALIVE: z.string().optional(),
-  DASHSCOPE_API_KEY: z.string().optional(),
-  DASHSCOPE_EMBEDDING_URL: z.url().optional().or(z.literal("")),
 
-  // Optional: LLM model configuration
+  // Optional: LLM model configuration (chat/streaming models)
   OPENAI_MODEL: z.string().optional(),
   OLLAMA_MODEL: z.string().optional(),
 
-  // Optional: Embedding model configuration
-  OPENAI_EMBEDDING_MODEL: z.string().optional(),
-  OLLAMA_EMBEDDING_MODEL: z.string().optional(),
+  // Required: Dashscope for text embeddings (ONLY provider for embeddings)
+  DASHSCOPE_API_KEY: z.string().optional(),
+  DASHSCOPE_EMBEDDING_URL: z.url().optional().or(z.literal("")),
   DASHSCOPE_EMBEDDING_MODEL: z.string().optional(),
 });
 

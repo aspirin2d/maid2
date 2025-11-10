@@ -5,23 +5,22 @@ import { env } from "./env.js";
 /**
  * Provider types for different LLM operations
  *
- * IMPORTANT: Dashscope is ONLY supported for text embeddings, NOT for chat completions.
+ * IMPORTANT: Text embeddings are ONLY provided by Dashscope.
  *
  * - ChatProvider: Providers that support chat completions and structured output ("openai" | "ollama")
- * - EmbeddingProvider: Providers that support text embeddings ("openai" | "ollama" | "dashscope")
+ * - EmbeddingProvider: Provider for text embeddings ("dashscope" ONLY)
  * - Provider: Legacy type alias for ChatProvider (for backwards compatibility)
  *
- * When to use each type:
- * - Use ChatProvider for chat, streaming, and structured parsing operations
- * - Use EmbeddingProvider for embedding generation operations
- * - Dashscope can ONLY be used with embedText/embedTexts functions
+ * Architecture:
+ * - Chat/Streaming: OpenAI or Ollama
+ * - Text Embeddings: Dashscope only
  */
 
 // Chat providers (for LLM completions and streaming)
 export type ChatProvider = "openai" | "ollama";
 
-// Embedding providers (for text embeddings) - includes Dashscope
-export type EmbeddingProvider = "openai" | "ollama" | "dashscope";
+// Embedding provider (text embeddings) - ONLY Dashscope
+export type EmbeddingProvider = "dashscope";
 
 // Legacy type alias for backwards compatibility with chat operations
 export type Provider = ChatProvider;
@@ -33,17 +32,14 @@ export const EMBEDDING_DIMS = 1536;
 export const OPENAI_MODEL = env.OPENAI_MODEL ?? "gpt-4.1";
 export const OLLAMA_MODEL =
   env.OLLAMA_MODEL ?? "alibayram/Qwen3-30B-A3B-Instruct-2507";
-export const OPENAI_EMBEDDING_MODEL =
-  env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small";
-export const OLLAMA_EMBEDDING_MODEL =
-  env.OLLAMA_EMBEDDING_MODEL ?? "qwen3-embedding";
+export const OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
+
+// Dashscope embedding configuration (Dashscope is the ONLY provider for text embeddings)
 export const DASHSCOPE_EMBEDDING_MODEL =
   env.DASHSCOPE_EMBEDDING_MODEL ?? "text-embedding-v4";
 export const DASHSCOPE_EMBEDDING_URL =
   env.DASHSCOPE_EMBEDDING_URL ||
   "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding";
-
-export const OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
 
 export function getOpenAI(): OpenAI {
   if (!env.OPENAI_API_KEY) {
@@ -59,14 +55,6 @@ export function getOpenAI(): OpenAI {
 export function getOllama(): Ollama {
   const host = env.OLLAMA_BASE_URL || "http://localhost:11434";
   return new Ollama({ host });
-}
-
-export function fitToDims(vec: number[], dims = EMBEDDING_DIMS): number[] {
-  if (vec.length === dims) return vec;
-  if (vec.length > dims) return vec.slice(0, dims);
-  const out = vec.slice();
-  while (out.length < dims) out.push(0);
-  return out;
 }
 
 /**
@@ -182,48 +170,39 @@ export interface DashscopeEmbeddingOptions {
   instruct?: string;
 }
 
+/**
+ * Generate text embeddings using Dashscope
+ *
+ * IMPORTANT: This function ONLY supports Dashscope. OpenAI and Ollama are not supported for embeddings.
+ *
+ * @param provider - Must be "dashscope"
+ * @param texts - Array of texts to embed
+ * @param dims - Embedding dimensions (default 1536, supports 512, 1024, 1536)
+ * @param options - Optional Dashscope embedding parameters
+ * @returns Array of embedding vectors
+ */
 export async function embedTexts(
   provider: EmbeddingProvider,
   texts: string[],
   dims = EMBEDDING_DIMS,
   options?: DashscopeEmbeddingOptions,
 ): Promise<number[][]> {
-  if (provider === "openai") {
-    const client = getOpenAI();
-    const res = await client.embeddings.create({
-      model: OPENAI_EMBEDDING_MODEL,
-      input: texts,
-      dimensions: dims,
-    });
-    return res.data.map((d) => d.embedding);
+  // Dashscope has a max batch size of 10 for text-embedding-v3/v4
+  const BATCH_SIZE = 10;
+  const allEmbeddings: number[][] = [];
+
+  // Process in batches of 10
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const batch = texts.slice(i, i + BATCH_SIZE);
+    const batchEmbeddings = await callDashscopeEmbedding(
+      batch,
+      dims,
+      options,
+    );
+    allEmbeddings.push(...batchEmbeddings);
   }
 
-  if (provider === "dashscope") {
-    // Dashscope has a max batch size of 10 for text-embedding-v3/v4
-    const BATCH_SIZE = 10;
-    const allEmbeddings: number[][] = [];
-
-    // Process in batches of 10
-    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-      const batch = texts.slice(i, i + BATCH_SIZE);
-      const batchEmbeddings = await callDashscopeEmbedding(
-        batch,
-        dims,
-        options,
-      );
-      allEmbeddings.push(...batchEmbeddings);
-    }
-
-    return allEmbeddings;
-  }
-
-  const client = getOllama();
-  const res = await client.embed({
-    model: OLLAMA_EMBEDDING_MODEL,
-    input: texts,
-    keep_alive: OLLAMA_KEEP_ALIVE,
-  });
-  return res.embeddings.map((e) => fitToDims(e, dims));
+  return allEmbeddings;
 }
 
 export async function embedText(

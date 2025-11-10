@@ -125,7 +125,7 @@ export async function searchSimilarMemories(
  * Insert a single memory with automatic embedding generation
  * If embedding is provided, uses it; otherwise generates from content
  *
- * @param provider - Embedding provider to use for embedding generation ("openai", "ollama", or "dashscope")
+ * @param provider - Embedding provider (must be "dashscope" - the only supported embedding provider)
  * @param memoryData - Memory data with or without embedding (userId and content are required)
  * @returns Inserted memory record with embedding, or null if content is empty
  */
@@ -151,7 +151,7 @@ export async function createMemory(memoryData: MemoryInsert) {
  * Insert memories with automatic embedding generation
  * If embedding is provided, uses it; otherwise generates from content
  *
- * @param provider - Embedding provider to use for embedding generation ("openai", "ollama", or "dashscope")
+ * @param provider - Embedding provider (must be "dashscope" - the only supported embedding provider)
  * @param memories - Array of memory data with or without embeddings (userId and content are required)
  * @returns Array of inserted memory records with embeddings
  */

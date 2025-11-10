@@ -116,7 +116,7 @@ export async function searchSimilarClips(
  * Search for similar clips using text query
  * Automatically generates embedding from the query text
  *
- * @param provider - Embedding provider to use for embedding generation ("openai", "ollama", or "dashscope")
+ * @param provider - Embedding provider (must be "dashscope" - the only supported embedding provider)
  * @param queryText - Text query to search for
  * @param options - Search options
  * @returns Array of similar clips with similarity scores

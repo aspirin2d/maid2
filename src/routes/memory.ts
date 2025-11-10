@@ -17,19 +17,20 @@ const memoryRoute = new Hono<{ Variables: AppVariables }>();
 // Apply authentication middleware to all memory routes
 memoryRoute.use("/*", requireAuth);
 
-const providerEnum = z.enum(["openai", "ollama"]);
-type Provider = z.infer<typeof providerEnum>;
+// Provider for memory extraction (chat/LLM operations)
+const extractProviderEnum = z.enum(["openai", "ollama"]);
+type ExtractProvider = z.infer<typeof extractProviderEnum>;
 
-const DEFAULT_PROVIDER: Provider = "openai";
+const DEFAULT_EXTRACT_PROVIDER: ExtractProvider = "openai";
 
 const memoryCategoryEnum = z.enum(MEMORY_CATEGORIES);
 
+// Note: Embeddings always use "dashscope" - no provider parameter needed
 const createMemorySchema = z.strictObject({
   content: z.string().trim().min(1, "Memory content is required"),
   category: memoryCategoryEnum.optional(),
   importance: z.number().min(0).max(1).optional(),
   confidence: z.number().min(0).max(1).optional(),
-  provider: providerEnum.optional(),
 });
 
 const updateMemorySchema = z.strictObject({
@@ -41,7 +42,6 @@ const updateMemorySchema = z.strictObject({
   category: memoryCategoryEnum.optional(),
   importance: z.number().min(0).max(1).optional(),
   confidence: z.number().min(0).max(1).optional(),
-  provider: providerEnum.optional(),
 });
 
 /**
@@ -70,7 +70,7 @@ memoryRoute.post("/extract", async (c) => {
   const payload = await c.req.json().catch(() => undefined);
   const parsed = z
     .strictObject({
-      provider: providerEnum.optional(),
+      provider: extractProviderEnum.optional(),
     })
     .safeParse(payload);
 
@@ -79,7 +79,7 @@ memoryRoute.post("/extract", async (c) => {
   }
 
   const { provider } = parsed.data;
-  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const resolvedProvider = provider ?? DEFAULT_EXTRACT_PROVIDER;
 
   try {
     const result = await extractMemoriesForUser(user.id, resolvedProvider);
@@ -107,11 +107,11 @@ memoryRoute.post("/", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const { content, category, importance, confidence, provider } = parsed.data;
-  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const { content, category, importance, confidence } = parsed.data;
 
   try {
-    const memory = await insertMemory(resolvedProvider, {
+    // Always use "dashscope" for embeddings (the only embedding provider)
+    const memory = await insertMemory("dashscope", {
       userId: user.id,
       content,
       category: category ?? null,
@@ -149,8 +149,7 @@ memoryRoute.put("/:id", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const { content, category, importance, confidence, provider } = parsed.data;
-  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const { content, category, importance, confidence } = parsed.data;
 
   try {
     // First check if the memory exists and belongs to the user
@@ -166,14 +165,14 @@ memoryRoute.put("/:id", async (c) => {
     if (importance !== undefined) updates.importance = importance;
     if (confidence !== undefined) updates.confidence = confidence;
 
-    // If content is being updated, regenerate the embedding
+    // If content is being updated, regenerate the embedding using Dashscope (the only embedding provider)
     if (content !== undefined) {
       updates.content = content;
       updates.prevContent = existingMemory.content;
 
       // Import embedText to generate new embedding
       const { embedText } = await import("../llm.js");
-      const embedding = await embedText(resolvedProvider, content);
+      const embedding = await embedText("dashscope", content);
       updates.embedding = embedding;
     }
 
