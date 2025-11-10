@@ -50,11 +50,18 @@ export function fitToDims(vec: number[], dims = EMBEDDING_DIMS): number[] {
  * Call Dashscope (Aliyun) text embedding API
  * @param texts - Array of texts to embed (max 10 for batch)
  * @param dims - Embedding dimensions (default 1536)
+ * @param options - Optional parameters
+ * @param options.text_type - Text type: "query" for search queries, "document" for documents to be searched
+ * @param options.instruct - Custom instruction for the embedding model
  * @returns Array of embedding vectors
  */
 async function callDashscopeEmbedding(
   texts: string[],
   dims = EMBEDDING_DIMS,
+  options?: {
+    text_type?: "query" | "document";
+    instruct?: string;
+  },
 ): Promise<number[][]> {
   if (!env.DASHSCOPE_API_KEY) {
     throw new Error(
@@ -65,22 +72,35 @@ async function callDashscopeEmbedding(
   // Dashscope API endpoint
   const endpoint = `${DASHSCOPE_BASE_URL}/services/embeddings/text-embedding/text-embedding`;
 
+  // Build request body with optional parameters
+  const requestBody: any = {
+    model: DASHSCOPE_EMBEDDING_MODEL,
+    input: {
+      texts: texts,
+    },
+    parameters: {
+      dimension: dims,
+      output_type: "dense",
+    },
+  };
+
+  // Add optional text_type if provided
+  if (options?.text_type) {
+    requestBody.parameters.text_type = options.text_type;
+  }
+
+  // Add optional instruct if provided
+  if (options?.instruct) {
+    requestBody.input.instruct = options.instruct;
+  }
+
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.DASHSCOPE_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: DASHSCOPE_EMBEDDING_MODEL,
-      input: {
-        texts: texts,
-      },
-      parameters: {
-        dimension: dims,
-        output_type: "dense",
-      },
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -110,10 +130,16 @@ async function callDashscopeEmbedding(
   return embeddings;
 }
 
+export interface DashscopeEmbeddingOptions {
+  text_type?: "query" | "document";
+  instruct?: string;
+}
+
 export async function embedTexts(
   provider: Provider,
   texts: string[],
   dims = EMBEDDING_DIMS,
+  options?: DashscopeEmbeddingOptions,
 ): Promise<number[][]> {
   if (provider === "openai") {
     const client = getOpenAI();
@@ -133,7 +159,7 @@ export async function embedTexts(
     // Process in batches of 10
     for (let i = 0; i < texts.length; i += BATCH_SIZE) {
       const batch = texts.slice(i, i + BATCH_SIZE);
-      const batchEmbeddings = await callDashscopeEmbedding(batch, dims);
+      const batchEmbeddings = await callDashscopeEmbedding(batch, dims, options);
       allEmbeddings.push(...batchEmbeddings);
     }
 
@@ -153,8 +179,9 @@ export async function embedText(
   provider: Provider,
   text: string,
   dims = EMBEDDING_DIMS,
+  options?: DashscopeEmbeddingOptions,
 ): Promise<number[]> {
-  const embeddings = await embedTexts(provider, [text], dims);
+  const embeddings = await embedTexts(provider, [text], dims, options);
   if (embeddings.length === 0) {
     throw new Error(
       "Failed to generate embedding: embedTexts returned empty array",

@@ -58,6 +58,50 @@ async function testDashscopeEmbedding() {
     }
     console.log();
 
+    // Test 5: text_type parameter (query vs document)
+    console.log("Test 5: Testing text_type parameter");
+    const queryText = "What is artificial intelligence?";
+    const documentText = "Artificial intelligence is a branch of computer science.";
+
+    const queryEmbedding = await embedText("dashscope", queryText, 1536, {
+      text_type: "query",
+    });
+    console.log(`✓ Query embedding: ${queryEmbedding.length} dimensions`);
+
+    const documentEmbedding = await embedText("dashscope", documentText, 1536, {
+      text_type: "document",
+    });
+    console.log(`✓ Document embedding: ${documentEmbedding.length} dimensions`);
+    console.log();
+
+    // Test 6: instruct parameter
+    console.log("Test 6: Testing instruct parameter");
+    const textWithInstruct = "Machine learning is a subset of AI.";
+    const embeddingWithInstruct = await embedText(
+      "dashscope",
+      textWithInstruct,
+      1536,
+      {
+        instruct: "Represent this sentence for retrieval:",
+      },
+    );
+    console.log(`✓ Embedding with instruct: ${embeddingWithInstruct.length} dimensions`);
+    console.log();
+
+    // Test 7: Combined text_type and instruct
+    console.log("Test 7: Testing combined text_type and instruct");
+    const combinedEmbedding = await embedText(
+      "dashscope",
+      "Deep learning uses neural networks.",
+      1536,
+      {
+        text_type: "document",
+        instruct: "Generate embeddings for semantic search:",
+      },
+    );
+    console.log(`✓ Combined params embedding: ${combinedEmbedding.length} dimensions`);
+    console.log();
+
     console.log("✅ All tests passed successfully!");
 
   } catch (error) {
