@@ -188,7 +188,36 @@ export const memory = pgTable(
   },
   (table) => [
     index("memory_user_idx").on(table.userId),
-    index("embeddingIndex").using(
+    index("memory_embedding_cos_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops"),
+    ),
+  ],
+);
+
+export const clip = pgTable(
+  "clip",
+  {
+    id: serial().primaryKey(),
+    originId: text("origin_id").notNull(),
+
+    startFrame: integer("start_frame").notNull(),
+    endFrame: integer("end_frame").notNull(),
+
+    videoUrl: text("video_url").notNull(),
+    animationUrl: text("animation_url"),
+
+    description: text("description").notNull(),
+    embedding: vector("embedding", { dimensions: 1536 }).notNull(), // Vector type for embedding in Drizzle ORM
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("clip_embedding_cos_idx").using(
       "hnsw",
       table.embedding.op("vector_cosine_ops"),
     ),
