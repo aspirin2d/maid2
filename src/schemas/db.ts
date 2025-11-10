@@ -118,7 +118,12 @@ export const story = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    provider: text("provider", { enum: ["openai", "ollama"] })
+    embeddingProvider: text("embedding_provider", {
+      enum: ["openai", "ollama", "dashscope"],
+    })
+      .notNull()
+      .default("dashscope"),
+    llmProvider: text("llm_provider", { enum: ["openai", "ollama"] })
       .notNull()
       .default("openai"),
     handler: text("handler").notNull().default("simple"),

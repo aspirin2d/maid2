@@ -17,10 +17,13 @@ const memoryRoute = new Hono<{ Variables: AppVariables }>();
 // Apply authentication middleware to all memory routes
 memoryRoute.use("/*", requireAuth);
 
-const providerEnum = z.enum(["openai", "ollama"]);
-type Provider = z.infer<typeof providerEnum>;
+const embeddingProviderEnum = z.enum(["openai", "ollama", "dashscope"]);
+const llmProviderEnum = z.enum(["openai", "ollama"]);
+type EmbeddingProvider = z.infer<typeof embeddingProviderEnum>;
+type LlmProvider = z.infer<typeof llmProviderEnum>;
 
-const DEFAULT_PROVIDER: Provider = "openai";
+const DEFAULT_EMBEDDING_PROVIDER: EmbeddingProvider = "dashscope";
+const DEFAULT_LLM_PROVIDER: LlmProvider = "openai";
 
 const memoryCategoryEnum = z.enum(MEMORY_CATEGORIES);
 
@@ -29,7 +32,7 @@ const createMemorySchema = z.strictObject({
   category: memoryCategoryEnum.optional(),
   importance: z.number().min(0).max(1).optional(),
   confidence: z.number().min(0).max(1).optional(),
-  provider: providerEnum.optional(),
+  embeddingProvider: embeddingProviderEnum.optional(),
 });
 
 const updateMemorySchema = z.strictObject({
@@ -70,7 +73,8 @@ memoryRoute.post("/extract", async (c) => {
   const payload = await c.req.json().catch(() => undefined);
   const parsed = z
     .strictObject({
-      provider: providerEnum.optional(),
+      embeddingProvider: embeddingProviderEnum.optional(),
+      llmProvider: llmProviderEnum.optional(),
     })
     .safeParse(payload);
 
@@ -78,11 +82,17 @@ memoryRoute.post("/extract", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const { provider } = parsed.data;
-  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const { embeddingProvider, llmProvider } = parsed.data;
+  const resolvedEmbeddingProvider =
+    embeddingProvider ?? DEFAULT_EMBEDDING_PROVIDER;
+  const resolvedLlmProvider = llmProvider ?? DEFAULT_LLM_PROVIDER;
 
   try {
-    const result = await extractMemoriesForUser(user.id, resolvedProvider);
+    const result = await extractMemoriesForUser(
+      user.id,
+      resolvedEmbeddingProvider,
+      resolvedLlmProvider,
+    );
     return c.json({
       factsExtracted: result.factsExtracted,
       memoriesUpdated: result.memoriesUpdated,
@@ -107,11 +117,13 @@ memoryRoute.post("/", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const { content, category, importance, confidence, provider } = parsed.data;
-  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const { content, category, importance, confidence, embeddingProvider } =
+    parsed.data;
+  const resolvedEmbeddingProvider =
+    embeddingProvider ?? DEFAULT_EMBEDDING_PROVIDER;
 
   try {
-    const memory = await insertMemory(resolvedProvider, {
+    const memory = await insertMemory(resolvedEmbeddingProvider, {
       userId: user.id,
       content,
       category: category ?? null,

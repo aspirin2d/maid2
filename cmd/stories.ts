@@ -16,7 +16,12 @@ import {
 } from "./core.js";
 import { buildHandlerInput, formatHandlerOutput } from "./handlers.js";
 import { apiFetch } from "./api.js";
-import { PROVIDERS, type ProviderOption } from "./constants.js";
+import {
+  EMBEDDING_PROVIDERS,
+  LLM_PROVIDERS,
+  type EmbeddingProviderOption,
+  type LlmProviderOption,
+} from "./constants.js";
 
 type StoryMenuResult =
   | { type: "exit" }
@@ -29,7 +34,8 @@ type StreamArgs = {
   token: string;
   storyId: number;
   handler: string;
-  provider: ProviderOption;
+  embeddingProvider: EmbeddingProviderOption;
+  llmProvider: LlmProviderOption;
   input: unknown;
 };
 
@@ -108,9 +114,15 @@ async function browseStories(token: string) {
 }
 
 async function createStoryFlow(token: string) {
-  const provider = await selectProvider();
-  if (!provider) {
-    console.log("Story creation cancelled (provider not selected).");
+  const embeddingProvider = await selectEmbeddingProvider();
+  if (!embeddingProvider) {
+    console.log("Story creation cancelled (embedding provider not selected).");
+    return;
+  }
+
+  const llmProvider = await selectLlmProvider();
+  if (!llmProvider) {
+    console.log("Story creation cancelled (LLM provider not selected).");
     return;
   }
 
@@ -131,7 +143,13 @@ async function createStoryFlow(token: string) {
     return;
   }
 
-  const created = await createStoryRequest(token, trimmed, provider, handler);
+  const created = await createStoryRequest(
+    token,
+    trimmed,
+    embeddingProvider,
+    llmProvider,
+    handler,
+  );
   if (created) {
     console.log(`Created story "${created.name}" (id ${created.id}).`);
   }
@@ -233,7 +251,8 @@ async function updateStoryRequest(
 async function createStoryRequest(
   token: string,
   name: string,
-  provider: ProviderOption,
+  embeddingProvider: EmbeddingProviderOption,
+  llmProvider: LlmProviderOption,
   handler: string,
 ) {
   const response = await apiFetch(
@@ -244,7 +263,7 @@ async function createStoryRequest(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, provider, handler }),
+      body: JSON.stringify({ name, embeddingProvider, llmProvider, handler }),
     },
     "app",
   );
@@ -319,7 +338,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
 
   printStoryDetails(storyDetails);
   console.log(
-    "\nEntering chat mode. Commands: /handler to switch handlers, /provider to switch providers, /clear to clear all messages, /exit to go back.",
+    "\nEntering chat mode. Commands: /handler to switch handlers, /embedding to switch embedding providers, /llm to switch LLM providers, /clear to clear all messages, /exit to go back.",
   );
 
   let handler = storyDetails.handler;
@@ -332,15 +351,26 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
     }
   }
 
-  const initialProvider =
-    typeof storyDetails.provider === "string" &&
-    PROVIDERS.includes(storyDetails.provider as ProviderOption)
-      ? (storyDetails.provider as ProviderOption)
-      : PROVIDERS[0];
+  const initialEmbeddingProvider =
+    typeof storyDetails.embeddingProvider === "string" &&
+    EMBEDDING_PROVIDERS.includes(
+      storyDetails.embeddingProvider as EmbeddingProviderOption,
+    )
+      ? (storyDetails.embeddingProvider as EmbeddingProviderOption)
+      : EMBEDDING_PROVIDERS[0];
 
-  let provider: ProviderOption = initialProvider;
+  const initialLlmProvider =
+    typeof storyDetails.llmProvider === "string" &&
+    LLM_PROVIDERS.includes(storyDetails.llmProvider as LlmProviderOption)
+      ? (storyDetails.llmProvider as LlmProviderOption)
+      : LLM_PROVIDERS[0];
 
-  console.log(`Using handler "${handler}" and provider "${provider}".`);
+  let embeddingProvider: EmbeddingProviderOption = initialEmbeddingProvider;
+  let llmProvider: LlmProviderOption = initialLlmProvider;
+
+  console.log(
+    `Using handler "${handler}", embedding provider "${embeddingProvider}", and LLM provider "${llmProvider}".`,
+  );
 
   while (true) {
     // Build handler-specific input (uses handler registry)
@@ -408,11 +438,20 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
         continue;
       }
 
-      if (command === "/provider") {
-        const nextProvider = await selectProvider(provider);
+      if (command === "/embedding") {
+        const nextProvider = await selectEmbeddingProvider(embeddingProvider);
         if (nextProvider) {
-          provider = nextProvider;
-          console.log(`Using provider "${provider}".`);
+          embeddingProvider = nextProvider;
+          console.log(`Using embedding provider "${embeddingProvider}".`);
+        }
+        continue;
+      }
+
+      if (command === "/llm") {
+        const nextProvider = await selectLlmProvider(llmProvider);
+        if (nextProvider) {
+          llmProvider = nextProvider;
+          console.log(`Using LLM provider "${llmProvider}".`);
         }
         continue;
       }
@@ -430,7 +469,8 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
       token,
       storyId: storyRecord.id,
       handler,
-      provider,
+      embeddingProvider,
+      llmProvider,
       input: userInput,
     });
   }
@@ -469,21 +509,55 @@ async function selectStoryHandler(
   }
 }
 
-async function selectProvider(current?: ProviderOption | string | null) {
+async function selectEmbeddingProvider(
+  current?: EmbeddingProviderOption | string | null,
+) {
   const normalized =
-    typeof current === "string" && PROVIDERS.includes(current as ProviderOption)
-      ? (current as ProviderOption)
+    typeof current === "string" &&
+    EMBEDDING_PROVIDERS.includes(current as EmbeddingProviderOption)
+      ? (current as EmbeddingProviderOption)
       : undefined;
 
   const defaultIndex = Math.max(
     0,
-    normalized ? PROVIDERS.indexOf(normalized) : 0,
+    normalized ? EMBEDDING_PROVIDERS.indexOf(normalized) : 0,
   );
 
   try {
-    return await select<ProviderOption>({
-      message: "Choose a provider",
-      choices: PROVIDERS.map((provider) => ({
+    return await select<EmbeddingProviderOption>({
+      message: "Choose an embedding provider",
+      choices: EMBEDDING_PROVIDERS.map((provider) => ({
+        name: provider,
+        value: provider,
+      })),
+      default: defaultIndex === -1 ? 0 : defaultIndex,
+    });
+  } catch (error) {
+    if (isPromptAbortError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function selectLlmProvider(
+  current?: LlmProviderOption | string | null,
+) {
+  const normalized =
+    typeof current === "string" &&
+    LLM_PROVIDERS.includes(current as LlmProviderOption)
+      ? (current as LlmProviderOption)
+      : undefined;
+
+  const defaultIndex = Math.max(
+    0,
+    normalized ? LLM_PROVIDERS.indexOf(normalized) : 0,
+  );
+
+  try {
+    return await select<LlmProviderOption>({
+      message: "Choose an LLM provider",
+      choices: LLM_PROVIDERS.map((provider) => ({
         name: provider,
         value: provider,
       })),
@@ -501,7 +575,8 @@ async function streamStoryConversation({
   token,
   storyId,
   handler,
-  provider,
+  embeddingProvider,
+  llmProvider,
   input: payload,
 }: StreamArgs) {
   const response = await apiFetch(
@@ -512,7 +587,12 @@ async function streamStoryConversation({
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ handler, provider, input: payload }),
+      body: JSON.stringify({
+        handler,
+        embeddingProvider,
+        llmProvider,
+        input: payload,
+      }),
     },
     "app",
   );
@@ -679,7 +759,8 @@ function printStoryDetails(storyRecord: StoryRecord) {
   console.log(`   ID: ${storyRecord.id}`);
   console.log(`   Name: ${storyRecord.name}`);
   console.log(`   Owner: ${storyRecord.userId}`);
-  console.log(`   Provider: ${storyRecord.provider}`);
+  console.log(`   Embedding Provider: ${storyRecord.embeddingProvider}`);
+  console.log(`   LLM Provider: ${storyRecord.llmProvider}`);
   console.log(`   Handler: ${storyRecord.handler}`);
   console.log(`   Created: ${created}`);
   console.log(`   Updated: ${updated}`);
@@ -777,7 +858,7 @@ async function listStoriesCommand(token: string) {
   for (const story of stories) {
     const updated = formatTimestamp(story.updatedAt);
     console.log(
-      `  [${story.id}] ${story.name} — provider: ${story.provider}, handler: ${story.handler} (updated ${updated})`,
+      `  [${story.id}] ${story.name} — embedding: ${story.embeddingProvider}, llm: ${story.llmProvider}, handler: ${story.handler} (updated ${updated})`,
     );
   }
 }
@@ -942,7 +1023,8 @@ export {
   fetchHandlers,
   fetchStoryDetails,
   printStoryDetails,
-  selectProvider,
+  selectEmbeddingProvider,
+  selectLlmProvider,
   selectStoryHandler,
   clearStoryMessagesCommand,
   createStoryCommand,

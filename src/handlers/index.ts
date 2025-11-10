@@ -9,7 +9,8 @@ export type JSONSchema = Record<string, JsonValue>;
 export interface StoryContext {
   story: number;
   userId: string;
-  provider?: "openai" | "ollama";
+  embeddingProvider?: "openai" | "ollama" | "dashscope";
+  llmProvider?: "openai" | "ollama";
 }
 
 // Handler configuration - can be stored per-story
@@ -100,7 +101,8 @@ export function registerStoryHandler(
     const testCtx: StoryContext = {
       story: 0,
       userId: "test",
-      provider: "openai",
+      embeddingProvider: "openai",
+      llmProvider: "openai",
     };
     const handler = factory(testCtx);
 
@@ -161,7 +163,8 @@ export function getHandlerMetadata(name: string): HandlerMetadata | undefined {
     const testCtx: StoryContext = {
       story: 0,
       userId: "test",
-      provider: "openai",
+      embeddingProvider: "openai",
+      llmProvider: "openai",
     };
     const handler = entry.factory(testCtx);
     if (handler.getMetadata) {

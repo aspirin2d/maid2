@@ -65,10 +65,12 @@ const renderPrompt = async (
 
   // Retrieve relevant memories for context
   const request = extractRequestText(input);
-  if (request && ctx.provider) {
+  if (request && ctx.embeddingProvider) {
     try {
       // Generate embedding for the current request
-      const [queryEmbedding] = await embedTexts(ctx.provider, [request]);
+      const [queryEmbedding] = await embedTexts(ctx.embeddingProvider, [
+        request,
+      ]);
 
       // Search for similar memories (top 5 most relevant)
       const memories = await searchSimilarMemories(queryEmbedding, {
