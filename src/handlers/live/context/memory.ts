@@ -20,17 +20,18 @@ export async function buildMemoryContext(
   config?: HandlerConfig,
 ): Promise<string> {
   // Skip memory retrieval if no search text or provider
-  if (!request || !ctx.provider) {
+  if (!request || !ctx.embeddingProvider) {
     return "";
   }
 
   try {
     // Extract configuration with sensible defaults
     const topK = (config?.memoryTopK as number | undefined) ?? 5;
-    const minSimilarity = (config?.memoryMinSimilarity as number | undefined) ?? 0.5;
+    const minSimilarity =
+      (config?.memoryMinSimilarity as number | undefined) ?? 0.1;
 
     // Generate embedding for semantic search
-    const [queryEmbedding] = await embedTexts(ctx.provider, [request]);
+    const [queryEmbedding] = await embedTexts(ctx.embeddingProvider, [request]);
 
     // Search for similar memories
     const memories = await searchSimilarMemories(queryEmbedding, {
@@ -38,6 +39,8 @@ export async function buildMemoryContext(
       topK,
       minSimilarity,
     });
+
+    // console.log(ctx.embeddingProvider, queryEmbedding.length, memories);
 
     if (memories.length === 0) {
       return "";

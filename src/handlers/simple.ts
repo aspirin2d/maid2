@@ -76,7 +76,7 @@ const renderPrompt = async (
       const memories = await searchSimilarMemories(queryEmbedding, {
         userId: ctx.userId,
         topK: 5,
-        minSimilarity: 0.5, // Only include memories with >50% similarity
+        minSimilarity: 0.1, // Only include memories with >50% similarity
       });
 
       // Add memory context to prompt if we found relevant memories
