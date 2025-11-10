@@ -44,6 +44,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OLLAMA_BASE_URL: z.url().optional().or(z.literal("")),
   OLLAMA_KEEP_ALIVE: z.string().optional(),
+  DASHSCOPE_API_KEY: z.string().optional(),
 
   // Optional: LLM model configuration
   OPENAI_MODEL: z.string().optional(),
@@ -52,6 +53,7 @@ const envSchema = z.object({
   // Optional: Embedding model configuration
   OPENAI_EMBEDDING_MODEL: z.string().optional(),
   OLLAMA_EMBEDDING_MODEL: z.string().optional(),
+  DASHSCOPE_EMBEDDING_MODEL: z.string().optional(),
 });
 
 function validateEnv() {
