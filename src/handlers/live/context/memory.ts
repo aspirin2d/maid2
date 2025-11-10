@@ -21,6 +21,12 @@ export async function buildMemoryContext(
 ): Promise<string> {
   // Skip memory retrieval if no search text or provider
   if (!request || !ctx.embeddingProvider) {
+    if (!request) {
+      console.debug('[MemoryContext] Skipping: no search text provided');
+    }
+    if (!ctx.embeddingProvider) {
+      console.debug('[MemoryContext] Skipping: no embedding provider configured');
+    }
     return "";
   }
 
@@ -33,6 +39,11 @@ export async function buildMemoryContext(
     // Generate embedding for semantic search
     const [queryEmbedding] = await embedTexts(ctx.embeddingProvider, [request]);
 
+    if (!queryEmbedding || queryEmbedding.length === 0) {
+      console.warn('[MemoryContext] Empty embedding returned from provider');
+      return "";
+    }
+
     // Search for similar memories
     const memories = await searchSimilarMemories(queryEmbedding, {
       userId: ctx.userId,
@@ -40,11 +51,12 @@ export async function buildMemoryContext(
       minSimilarity,
     });
 
-    // console.log(ctx.embeddingProvider, queryEmbedding.length, memories);
-
     if (memories.length === 0) {
+      console.debug('[MemoryContext] No relevant memories found');
       return "";
     }
+
+    console.debug(`[MemoryContext] Retrieved ${memories.length} memories`);
 
     // Format memories for prompt inclusion
     const lines: string[] = [
@@ -66,7 +78,12 @@ export async function buildMemoryContext(
     return lines.join("\n");
   } catch (error) {
     // Fail gracefully - don't break the handler if memory retrieval fails
-    console.error("Failed to retrieve memories for context:", error);
+    console.error('[MemoryContext] Failed to retrieve memories:', {
+      error: error instanceof Error ? error.message : String(error),
+      userId: ctx.userId,
+      provider: ctx.embeddingProvider,
+      requestLength: request.length,
+    });
     return "";
   }
 }

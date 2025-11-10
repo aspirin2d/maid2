@@ -1,10 +1,12 @@
 import { z } from "zod";
+import type { JsonValue } from "../../types.js";
 import {
   registerStoryHandler,
   type HandlerConfig,
   type HandlerMetadata,
   type StoryContext,
   type StoryHandler,
+  type HandlerResult,
 } from "../index.js";
 import { buildPrompt } from "./prompt-builder.js";
 import {
@@ -14,13 +16,14 @@ import {
   type LiveEvent,
   type LiveInput,
 } from "./events.js";
+import { parseLLMResponse, validateInput } from "./utils.js";
 
 /**
  * Schema for a single VTuber response clip
  * Each clip contains body movement, facial expression, and speech
  */
 const clipSchema = z.object({
-  body: z.string().describe("身体动作/姿势描"),
+  body: z.string().describe("身体动作/姿势描述"),
   face: z.string().describe("面部表情描述"),
   speech: z.string().describe("VTuber要说的文本内容"),
 });
@@ -33,87 +36,7 @@ const outputSchema = z.object({
   clips: z.array(clipSchema).min(1).max(3).describe("VTuber回复的1-3个片段"),
 });
 
-/**
- * Remove markdown code fences from a string
- * Handles ```json, ```, and trailing ``` markers
- */
-function removeMarkdownCodeFences(text: string): string {
-  let trimmed = text.trim();
-
-  // Remove leading code fence
-  if (trimmed.startsWith('```json')) {
-    trimmed = trimmed.slice(7); // Remove ```json
-  } else if (trimmed.startsWith('```')) {
-    trimmed = trimmed.slice(3); // Remove ```
-  }
-
-  // Remove trailing code fence
-  if (trimmed.endsWith('```')) {
-    trimmed = trimmed.slice(0, -3); // Remove trailing ```
-  }
-
-  return trimmed.trim();
-}
-
-/**
- * Result of parsing LLM response
- */
-interface ParseResult {
-  /** Successfully parsed and validated output */
-  success: boolean;
-  /** Parsed output (only if success is true) */
-  data?: z.infer<typeof outputSchema>;
-  /** Cleaned response text (markdown fences removed) */
-  cleanedText: string;
-  /** Error message (only if success is false) */
-  error?: string;
-}
-
-/**
- * Parse and validate LLM response against output schema
- * @param rawResponse - Raw LLM response text (may contain markdown fences)
- * @returns ParseResult with success status, data, and error info
- */
-function parseLLMResponse(rawResponse: string): ParseResult {
-  // Step 1: Clean markdown fences
-  const cleanedText = removeMarkdownCodeFences(rawResponse);
-
-  if (cleanedText.length === 0) {
-    return {
-      success: false,
-      cleanedText: '',
-      error: 'Empty response after cleaning markdown fences',
-    };
-  }
-
-  // Step 2: Parse JSON
-  let jsonData: unknown;
-  try {
-    jsonData = JSON.parse(cleanedText);
-  } catch (error) {
-    return {
-      success: false,
-      cleanedText,
-      error: `JSON parse error: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-
-  // Step 3: Validate against schema
-  try {
-    const validatedData = outputSchema.parse(jsonData);
-    return {
-      success: true,
-      data: validatedData,
-      cleanedText,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      cleanedText,
-      error: `Schema validation error: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-}
+type OutputData = z.infer<typeof outputSchema>;
 
 /**
  * Metadata for the live handler
@@ -123,7 +46,7 @@ const metadata: HandlerMetadata = {
   name: "live",
   description:
     "AI VTuber处理器，支持事件驱动输入（弹幕、礼物、节目切换等），使用中文回复，输出包含身体动作、面部表情和语音的1-3个片段",
-  version: "2.0.0",
+  version: "2.1.0",
   inputSchema: liveInputSchema,
   outputSchema,
   capabilities: {
@@ -134,65 +57,112 @@ const metadata: HandlerMetadata = {
 };
 
 /**
+ * Build metadata object for persistence
+ * Includes parse result and error information if applicable
+ */
+function buildResponseMetadata(
+  parseResult: ReturnType<typeof parseLLMResponse<typeof outputSchema>>,
+): Record<string, JsonValue> | undefined {
+  const metadata: Record<string, JsonValue> = {};
+
+  if (parseResult.success && parseResult.data) {
+    metadata.parsedOutput = parseResult.data;
+  } else if (parseResult.error) {
+    console.error('[LiveHandler] Failed to parse LLM response:', parseResult.error);
+    metadata.parseError = parseResult.error;
+
+    // Log detailed error information for debugging
+    if (parseResult.errorDetails) {
+      console.error('[LiveHandler] Error details:', {
+        stage: parseResult.errorDetails.stage,
+        cleanedTextLength: parseResult.cleanedText.length,
+        cleanedTextPreview: parseResult.cleanedText.slice(0, 200),
+      });
+    }
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+/**
+ * Determine message content for persistence
+ * Prefers validated parsed output, falls back to cleaned text
+ */
+function getMessageContent(
+  parseResult: ReturnType<typeof parseLLMResponse<typeof outputSchema>>,
+): string | undefined {
+  if (parseResult.success && parseResult.data) {
+    return JSON.stringify(parseResult.data);
+  }
+  return parseResult.cleanedText || undefined;
+}
+
+/**
  * Factory function that creates a live handler instance
  * @param ctx - Story context containing user and story information
  * @param config - Optional handler configuration
  */
 const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
-  let userInput: LiveInput | null = null;
+  // Handler state
+  let validatedInput: LiveInput | null = null;
   let normalizedEvent: LiveEvent | null = null;
   let assistantResponse = "";
 
   return {
-    async init(input: any) {
-      userInput = input;
+    async init(input: unknown) {
+      // Early input validation
+      const validationResult = validateInput(input, liveInputSchema);
+      if (!validationResult.success) {
+        console.error('[LiveHandler] Input validation failed:', validationResult.error);
+        throw new Error(validationResult.error);
+      }
+
+      validatedInput = validationResult.data;
+
       // Normalize input to event format for consistent processing
-      normalizedEvent = normalizeToEvent(input);
+      normalizedEvent = normalizeToEvent(validatedInput);
 
       return {
         prompt: await buildPrompt(normalizedEvent, ctx, config),
         schema: outputSchema,
       };
     },
-    onStart() {
-      // No return value - decoupled from SSE
+
+    onStart(): void {
+      // Reset state for new stream
+      assistantResponse = "";
     },
-    onContent(content) {
+
+    onContent(content: string): string {
       assistantResponse += content;
       return content;
     },
-    onThinking(content) {
+
+    onThinking(content: string): string {
+      // Pass through thinking content as-is
       return content;
     },
-    async onFinish() {
+
+    async onFinish(): Promise<HandlerResult> {
       // Extract user message from the normalized event
       const userContent = normalizedEvent ? extractEventText(normalizedEvent) : null;
 
       // Parse and validate LLM response
-      const parseResult = parseLLMResponse(assistantResponse);
+      const parseResult = parseLLMResponse(assistantResponse, outputSchema);
 
       // Build metadata with parse result
-      const metadata: Record<string, any> = {};
-      if (parseResult.success && parseResult.data) {
-        metadata.parsedOutput = parseResult.data;
-      } else if (parseResult.error) {
-        console.error('Failed to parse LLM response:', parseResult.error);
-        metadata.parseError = parseResult.error;
-      }
+      const resultMetadata = buildResponseMetadata(parseResult);
 
-      // Determine message content:
-      // - Use validated parsed output (re-serialized) if available
-      // - Otherwise use cleaned text (markdown fences removed)
-      const messageContent = parseResult.success && parseResult.data
-        ? JSON.stringify(parseResult.data)
-        : (parseResult.cleanedText || undefined);
+      // Determine message content for persistence
+      const messageContent = getMessageContent(parseResult);
 
       return {
         userMessage: userContent ?? undefined,
         assistantMessage: messageContent,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        metadata: resultMetadata,
       };
     },
+
     getMetadata(): HandlerMetadata {
       return metadata;
     },
