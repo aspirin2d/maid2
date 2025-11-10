@@ -44,7 +44,7 @@ const updateMemorySchema = z.strictObject({
   category: memoryCategoryEnum.optional(),
   importance: z.number().min(0).max(1).optional(),
   confidence: z.number().min(0).max(1).optional(),
-  provider: providerEnum.optional(),
+  embeddingProvider: embeddingProviderEnum.optional(),
 });
 
 /**
@@ -161,8 +161,9 @@ memoryRoute.put("/:id", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const { content, category, importance, confidence, provider } = parsed.data;
-  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const { content, category, importance, confidence, embeddingProvider } =
+    parsed.data;
+  const resolvedProvider = embeddingProvider ?? DEFAULT_EMBEDDING_PROVIDER;
 
   try {
     // First check if the memory exists and belongs to the user
