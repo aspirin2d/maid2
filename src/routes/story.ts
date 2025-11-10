@@ -28,7 +28,7 @@ type EmbeddingProvider = z.infer<typeof embeddingProviderEnum>;
 type LlmProvider = z.infer<typeof llmProviderEnum>;
 const handlerSchema = z.string().trim().min(1, "Story handler is required");
 
-const DEFAULT_EMBEDDING_PROVIDER: EmbeddingProvider = "openai";
+const DEFAULT_EMBEDDING_PROVIDER: EmbeddingProvider = "dashscope";
 const DEFAULT_LLM_PROVIDER: LlmProvider = "openai";
 const DEFAULT_HANDLER = "simple";
 

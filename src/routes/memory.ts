@@ -22,7 +22,7 @@ const llmProviderEnum = z.enum(["openai", "ollama"]);
 type EmbeddingProvider = z.infer<typeof embeddingProviderEnum>;
 type LlmProvider = z.infer<typeof llmProviderEnum>;
 
-const DEFAULT_EMBEDDING_PROVIDER: EmbeddingProvider = "openai";
+const DEFAULT_EMBEDDING_PROVIDER: EmbeddingProvider = "dashscope";
 const DEFAULT_LLM_PROVIDER: LlmProvider = "openai";
 
 const memoryCategoryEnum = z.enum(MEMORY_CATEGORIES);

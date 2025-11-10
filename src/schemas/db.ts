@@ -122,7 +122,7 @@ export const story = pgTable(
       enum: ["openai", "ollama", "dashscope"],
     })
       .notNull()
-      .default("openai"),
+      .default("dashscope"),
     llmProvider: text("llm_provider", { enum: ["openai", "ollama"] })
       .notNull()
       .default("openai"),
