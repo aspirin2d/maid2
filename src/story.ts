@@ -43,7 +43,8 @@ export async function storyExists(userId: string, storyId: number) {
 export async function createStory(
   userId: string,
   name: string,
-  provider: "openai" | "ollama",
+  embeddingProvider: "openai" | "ollama" | "dashscope",
+  llmProvider: "openai" | "ollama",
   handler: string,
 ) {
   const inserted = await db
@@ -51,7 +52,8 @@ export async function createStory(
     .values({
       userId,
       name,
-      provider,
+      embeddingProvider,
+      llmProvider,
       handler,
     })
     .returning();

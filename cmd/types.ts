@@ -47,7 +47,8 @@ export type StoryRecord = {
   id: number;
   userId: string;
   name: string;
-  provider: string;
+  embeddingProvider: string;
+  llmProvider: string;
   handler: string;
   createdAt: string;
   updatedAt: string;

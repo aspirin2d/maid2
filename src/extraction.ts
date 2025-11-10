@@ -27,13 +27,17 @@ import z from "zod";
  * Extracts memories from unextracted messages for a given user
  *
  * @param userId - The user ID to extract memories for
- * @param provider - LLM provider to use ("openai" or "ollama")
+ * @param embeddingProvider - Embedding provider to use for generating embeddings
+ * @param llmProvider - LLM provider to use for fact extraction and decision making
  * @returns Object containing extracted facts count, updated memories count, and extracted messages count
  */
 export async function extractMemoriesForUser(
   userId: string,
-  provider: Provider,
+  embeddingProvider: Provider,
+  llmProvider?: Provider,
 ): Promise<{ factsExtracted: number; memoriesUpdated: number; messagesExtracted: number }> {
+  // If llmProvider is not specified, use embeddingProvider for both
+  const actualLlmProvider = llmProvider ?? embeddingProvider;
   // Step 1: Fetch unextracted messages from the given user
   const unextractedMessages = await getMessagesByUser(userId, {
     extracted: false,
@@ -54,7 +58,9 @@ export async function extractMemoriesForUser(
   const factExtractionPrompt = getFactRetrievalMessages(parsedMessages);
 
   const parseFn =
-    provider === "openai" ? parseOpenAIStructured : parseOllamaStructured;
+    actualLlmProvider === "openai"
+      ? parseOpenAIStructured
+      : parseOllamaStructured;
 
   const factExtractionResult = await parseFn({
     prompt: factExtractionPrompt,
@@ -78,7 +84,7 @@ export async function extractMemoriesForUser(
   // Step 3: Prepare similarity context (with unified IDs: 1, 2, 3...)
   // Generate embeddings for all facts
   const factTexts = parsedFacts.facts.map((fact) => fact.text);
-  const factEmbeddings = await embedTexts(provider, factTexts);
+  const factEmbeddings = await embedTexts(embeddingProvider, factTexts);
 
   // Search for similar memories for each fact
   const similarMemoriesResults = await bulkSearchSimilarMemories(
@@ -157,7 +163,7 @@ export async function extractMemoriesForUser(
           const fact = parsedFacts.facts[factIndex];
 
           // Insert new memory with the fact's text (or decision text if provided)
-          await insertMemories(provider, [
+          await insertMemories(embeddingProvider, [
             {
               userId: userId,
               content: decision.text || fact.text,
@@ -182,7 +188,7 @@ export async function extractMemoriesForUser(
           const fact = parsedFacts.facts[0]; // TODO: Improve this mapping logic
 
           // Generate embedding for updated content
-          const [updatedEmbedding] = await embedTexts(provider, [
+          const [updatedEmbedding] = await embedTexts(embeddingProvider, [
             decision.text,
           ]);
 

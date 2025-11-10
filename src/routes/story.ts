@@ -22,22 +22,27 @@ const storiesRoute = new Hono<{ Variables: AppVariables }>();
 // Apply authentication middleware to all story routes
 storiesRoute.use("/*", requireAuth);
 
-const providerEnum = z.enum(["openai", "ollama"]);
-type Provider = z.infer<typeof providerEnum>;
+const embeddingProviderEnum = z.enum(["openai", "ollama", "dashscope"]);
+const llmProviderEnum = z.enum(["openai", "ollama"]);
+type EmbeddingProvider = z.infer<typeof embeddingProviderEnum>;
+type LlmProvider = z.infer<typeof llmProviderEnum>;
 const handlerSchema = z.string().trim().min(1, "Story handler is required");
 
-const DEFAULT_PROVIDER: Provider = "openai";
+const DEFAULT_EMBEDDING_PROVIDER: EmbeddingProvider = "openai";
+const DEFAULT_LLM_PROVIDER: LlmProvider = "openai";
 const DEFAULT_HANDLER = "simple";
 
 const createStorySchema = z.strictObject({
   name: z.string().trim().min(1, "Story name is required"),
-  provider: providerEnum.optional(),
+  embeddingProvider: embeddingProviderEnum.optional(),
+  llmProvider: llmProviderEnum.optional(),
   handler: handlerSchema.optional(),
 });
 
 const updateStorySchema = z.strictObject({
   name: z.string().trim().min(1, "Story name cannot be empty").optional(),
-  provider: providerEnum.optional(),
+  embeddingProvider: embeddingProviderEnum.optional(),
+  llmProvider: llmProviderEnum.optional(),
   handler: handlerSchema.optional(),
 });
 
@@ -79,8 +84,10 @@ storiesRoute.post("/", async (c) => {
     return c.json({ error: formatZodError(parsed.error) }, 400);
   }
 
-  const { name, provider, handler } = parsed.data;
-  const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+  const { name, embeddingProvider, llmProvider, handler } = parsed.data;
+  const resolvedEmbeddingProvider =
+    embeddingProvider ?? DEFAULT_EMBEDDING_PROVIDER;
+  const resolvedLlmProvider = llmProvider ?? DEFAULT_LLM_PROVIDER;
   const resolvedHandler = handler ?? DEFAULT_HANDLER;
 
   if (!isValidHandler(resolvedHandler)) {
@@ -91,7 +98,8 @@ storiesRoute.post("/", async (c) => {
     const inserted = await createStory(
       user.id,
       name,
-      resolvedProvider,
+      resolvedEmbeddingProvider,
+      resolvedLlmProvider,
       resolvedHandler,
     );
     return c.json({ story: inserted }, 201);
@@ -113,14 +121,18 @@ storiesRoute.patch("/:id", validateStoryId, async (c) => {
 
   const updates: Partial<{
     name: string;
-    provider: "openai" | "ollama";
+    embeddingProvider: "openai" | "ollama" | "dashscope";
+    llmProvider: "openai" | "ollama";
     handler: string;
   }> = {};
   if (parsed.data.name !== undefined) {
     updates.name = parsed.data.name;
   }
-  if (parsed.data.provider !== undefined) {
-    updates.provider = parsed.data.provider;
+  if (parsed.data.embeddingProvider !== undefined) {
+    updates.embeddingProvider = parsed.data.embeddingProvider;
+  }
+  if (parsed.data.llmProvider !== undefined) {
+    updates.llmProvider = parsed.data.llmProvider;
   }
   if (parsed.data.handler !== undefined) {
     if (!isValidHandler(parsed.data.handler)) {
@@ -213,7 +225,8 @@ storiesRoute.post("/:id/messages", validateStoryId, async (c) => {
   if (!currentStory) {
     return c.json({ error: "Story not found" }, 404);
   }
-  const resolvedProvider: Provider = currentStory.provider;
+  const resolvedEmbeddingProvider = currentStory.embeddingProvider;
+  const resolvedLlmProvider = currentStory.llmProvider;
   const resolvedHandler = currentStory.handler;
 
   if (!isValidHandler(resolvedHandler)) {
@@ -225,7 +238,8 @@ storiesRoute.post("/:id/messages", validateStoryId, async (c) => {
   const handler = getStoryHandler(resolvedHandler, {
     story: id,
     userId: user.id,
-    provider: resolvedProvider,
+    embeddingProvider: resolvedEmbeddingProvider,
+    llmProvider: resolvedLlmProvider,
   });
   if (!handler)
     return c.json({ error: `handler not found: ${resolvedHandler}` }, 400);
@@ -245,7 +259,7 @@ storiesRoute.post("/:id/messages", validateStoryId, async (c) => {
 
   // 3) Use streaming adapter to handle the complexity
   return streamWithAdapter(c, {
-    provider: resolvedProvider,
+    llmProvider: resolvedLlmProvider,
     handler,
     prompt,
     schema,

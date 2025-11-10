@@ -5,8 +5,10 @@ import process from "node:process";
 // LLM Providers
 // ============================================================================
 
-export const PROVIDERS = ["ollama", "openai"] as const;
-export type ProviderOption = (typeof PROVIDERS)[number];
+export const EMBEDDING_PROVIDERS = ["ollama", "openai", "dashscope"] as const;
+export const LLM_PROVIDERS = ["ollama", "openai"] as const;
+export type EmbeddingProviderOption = (typeof EMBEDDING_PROVIDERS)[number];
+export type LlmProviderOption = (typeof LLM_PROVIDERS)[number];
 
 // ============================================================================
 // Memory Categories
