@@ -17,6 +17,8 @@ export const OLLAMA_EMBEDDING_MODEL =
   env.OLLAMA_EMBEDDING_MODEL ?? "qwen3-embedding";
 export const DASHSCOPE_EMBEDDING_MODEL =
   env.DASHSCOPE_EMBEDDING_MODEL ?? "text-embedding-v4";
+export const DASHSCOPE_BASE_URL =
+  env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/api/v1";
 
 export const OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
 
@@ -61,8 +63,7 @@ async function callDashscopeEmbedding(
   }
 
   // Dashscope API endpoint
-  const endpoint =
-    "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding";
+  const endpoint = `${DASHSCOPE_BASE_URL}/services/embeddings/text-embedding/text-embedding`;
 
   const response = await fetch(endpoint, {
     method: "POST",

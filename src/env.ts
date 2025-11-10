@@ -45,6 +45,7 @@ const envSchema = z.object({
   OLLAMA_BASE_URL: z.url().optional().or(z.literal("")),
   OLLAMA_KEEP_ALIVE: z.string().optional(),
   DASHSCOPE_API_KEY: z.string().optional(),
+  DASHSCOPE_BASE_URL: z.url().optional().or(z.literal("")),
 
   // Optional: LLM model configuration
   OPENAI_MODEL: z.string().optional(),
