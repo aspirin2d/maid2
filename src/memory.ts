@@ -1,7 +1,7 @@
 import { and, cosineDistance, desc, eq, isNotNull } from "drizzle-orm";
 import db from "./db.js";
 import { memory } from "./schemas/db.js";
-import { embedTexts, type Provider } from "./llm.js";
+import { embedTexts, type EmbeddingProvider } from "./llm.js";
 
 type MemoryInsert = typeof memory.$inferInsert;
 type MemorySelect = typeof memory.$inferSelect;
@@ -125,12 +125,12 @@ export async function searchSimilarMemories(
  * Insert a single memory with automatic embedding generation
  * If embedding is provided, uses it; otherwise generates from content
  *
- * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
+ * @param provider - Embedding provider to use for embedding generation ("openai", "ollama", or "dashscope")
  * @param memoryData - Memory data with or without embedding (userId and content are required)
  * @returns Inserted memory record with embedding, or null if content is empty
  */
 export async function insertMemory(
-  provider: Provider,
+  provider: EmbeddingProvider,
   memoryData: Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">,
 ) {
   const result = await insertMemories(provider, [memoryData]);
@@ -151,12 +151,12 @@ export async function createMemory(memoryData: MemoryInsert) {
  * Insert memories with automatic embedding generation
  * If embedding is provided, uses it; otherwise generates from content
  *
- * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
+ * @param provider - Embedding provider to use for embedding generation ("openai", "ollama", or "dashscope")
  * @param memories - Array of memory data with or without embeddings (userId and content are required)
  * @returns Array of inserted memory records with embeddings
  */
 export async function insertMemories(
-  provider: Provider,
+  provider: EmbeddingProvider,
   memories: Array<
     Partial<MemoryInsert> & Pick<MemoryInsert, "userId" | "content">
   >,

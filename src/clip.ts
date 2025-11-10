@@ -1,7 +1,7 @@
 import { and, cosineDistance, isNotNull, eq } from "drizzle-orm";
 import db from "./db.js";
 import { clip } from "./schemas/db.js";
-import { embedTexts, type Provider } from "./llm.js";
+import { embedTexts, type EmbeddingProvider } from "./llm.js";
 
 type ClipSelect = typeof clip.$inferSelect;
 
@@ -116,13 +116,13 @@ export async function searchSimilarClips(
  * Search for similar clips using text query
  * Automatically generates embedding from the query text
  *
- * @param provider - LLM provider to use for embedding generation ("openai" or "ollama")
+ * @param provider - Embedding provider to use for embedding generation ("openai", "ollama", or "dashscope")
  * @param queryText - Text query to search for
  * @param options - Search options
  * @returns Array of similar clips with similarity scores
  */
 export async function searchSimilarClipsByText(
-  provider: Provider,
+  provider: EmbeddingProvider,
   queryText: string,
   options?: {
     topK?: number;

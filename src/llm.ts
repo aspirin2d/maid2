@@ -2,7 +2,29 @@ import { Ollama } from "ollama";
 import OpenAI from "openai";
 import { env } from "./env.js";
 
-export type Provider = "openai" | "ollama" | "dashscope";
+/**
+ * Provider types for different LLM operations
+ *
+ * IMPORTANT: Dashscope is ONLY supported for text embeddings, NOT for chat completions.
+ *
+ * - ChatProvider: Providers that support chat completions and structured output ("openai" | "ollama")
+ * - EmbeddingProvider: Providers that support text embeddings ("openai" | "ollama" | "dashscope")
+ * - Provider: Legacy type alias for ChatProvider (for backwards compatibility)
+ *
+ * When to use each type:
+ * - Use ChatProvider for chat, streaming, and structured parsing operations
+ * - Use EmbeddingProvider for embedding generation operations
+ * - Dashscope can ONLY be used with embedText/embedTexts functions
+ */
+
+// Chat providers (for LLM completions and streaming)
+export type ChatProvider = "openai" | "ollama";
+
+// Embedding providers (for text embeddings) - includes Dashscope
+export type EmbeddingProvider = "openai" | "ollama" | "dashscope";
+
+// Legacy type alias for backwards compatibility with chat operations
+export type Provider = ChatProvider;
 
 // Shared embedding configuration
 export const EMBEDDING_DIMS = 1536;
@@ -49,12 +71,19 @@ export function fitToDims(vec: number[], dims = EMBEDDING_DIMS): number[] {
 
 /**
  * Call Dashscope (Aliyun) text embedding API
- * @param texts - Array of texts to embed (max 10 for batch)
- * @param dims - Embedding dimensions (default 1536)
- * @param options - Optional parameters
- * @param options.text_type - Text type: "query" for search queries, "document" for documents to be searched
- * @param options.instruct - Custom instruction for the embedding model
- * @returns Array of embedding vectors
+ *
+ * Dashscope text embedding API supports batch processing (max 10 texts per request)
+ * and optional parameters for better semantic search results.
+ *
+ * @param texts - Array of texts to embed (max 10 per batch, auto-batched by caller)
+ * @param dims - Embedding dimensions (default 1536, supports 512, 1024, 1536)
+ * @param options - Optional parameters for fine-tuning embeddings
+ * @param options.text_type - Optimizes embedding for specific use case:
+ *   - "query": Use for search queries (user input to find documents)
+ *   - "document": Use for documents to be searched (stored content)
+ * @param options.instruct - Custom instruction to guide embedding generation
+ *   - Example: "Represent this sentence for retrieval:"
+ * @returns Array of embedding vectors (one per input text)
  */
 async function callDashscopeEmbedding(
   texts: string[],
@@ -126,13 +155,35 @@ async function callDashscopeEmbedding(
   return embeddings;
 }
 
+/**
+ * Options for Dashscope text embedding (optional)
+ *
+ * These parameters help optimize embeddings for specific use cases:
+ * - text_type: "query" for user search queries, "document" for stored documents
+ * - instruct: Custom instruction to guide the embedding model
+ *
+ * Example usage:
+ * ```typescript
+ * // For storing documents
+ * await embedText("dashscope", content, 1536, { text_type: "document" });
+ *
+ * // For user queries
+ * await embedText("dashscope", userQuery, 1536, { text_type: "query" });
+ *
+ * // With custom instruction
+ * await embedText("dashscope", text, 1536, {
+ *   text_type: "document",
+ *   instruct: "Represent this for semantic search:"
+ * });
+ * ```
+ */
 export interface DashscopeEmbeddingOptions {
   text_type?: "query" | "document";
   instruct?: string;
 }
 
 export async function embedTexts(
-  provider: Provider,
+  provider: EmbeddingProvider,
   texts: string[],
   dims = EMBEDDING_DIMS,
   options?: DashscopeEmbeddingOptions,
@@ -176,7 +227,7 @@ export async function embedTexts(
 }
 
 export async function embedText(
-  provider: Provider,
+  provider: EmbeddingProvider,
   text: string,
   dims = EMBEDDING_DIMS,
   options?: DashscopeEmbeddingOptions,
