@@ -137,15 +137,18 @@ export async function embedTexts(
   dims = EMBEDDING_DIMS,
   options?: DashscopeEmbeddingOptions,
 ): Promise<number[][]> {
-  if (provider === "openai") {
-    const client = getOpenAI();
-    const res = await client.embeddings.create({
-      model: OPENAI_EMBEDDING_MODEL,
-      input: texts,
-      dimensions: dims,
-    });
-    return res.data.map((d) => d.embedding);
-  }
+  // ONLY USE DASHSCOPE FOR TEXT EMBEDDING
+  // Other providers are commented out
+
+  // if (provider === "openai") {
+  //   const client = getOpenAI();
+  //   const res = await client.embeddings.create({
+  //     model: OPENAI_EMBEDDING_MODEL,
+  //     input: texts,
+  //     dimensions: dims,
+  //   });
+  //   return res.data.map((d) => d.embedding);
+  // }
 
   if (provider === "dashscope") {
     // Dashscope has a max batch size of 10 for text-embedding-v3/v4
@@ -166,13 +169,32 @@ export async function embedTexts(
     return allEmbeddings;
   }
 
-  const client = getOllama();
-  const res = await client.embed({
-    model: OLLAMA_EMBEDDING_MODEL,
-    input: texts,
-    keep_alive: OLLAMA_KEEP_ALIVE,
-  });
-  return res.embeddings.map((e) => fitToDims(e, dims));
+  // Fallback to Dashscope for any other provider
+  // (OpenAI and Ollama are disabled)
+
+  // const client = getOllama();
+  // const res = await client.embed({
+  //   model: OLLAMA_EMBEDDING_MODEL,
+  //   input: texts,
+  //   keep_alive: OLLAMA_KEEP_ALIVE,
+  // });
+  // return res.embeddings.map((e) => fitToDims(e, dims));
+
+  // If provider is not dashscope, use dashscope anyway
+  const BATCH_SIZE = 10;
+  const allEmbeddings: number[][] = [];
+
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const batch = texts.slice(i, i + BATCH_SIZE);
+    const batchEmbeddings = await callDashscopeEmbedding(
+      batch,
+      dims,
+      options,
+    );
+    allEmbeddings.push(...batchEmbeddings);
+  }
+
+  return allEmbeddings;
 }
 
 export async function embedText(
