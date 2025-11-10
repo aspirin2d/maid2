@@ -2,7 +2,7 @@ import { Ollama } from "ollama";
 import OpenAI from "openai";
 import { env } from "./env.js";
 
-export type Provider = "openai" | "ollama";
+export type Provider = "openai" | "ollama" | "dashscope";
 
 // Shared embedding configuration
 export const EMBEDDING_DIMS = 1536;
@@ -15,6 +15,10 @@ export const OPENAI_EMBEDDING_MODEL =
   env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small";
 export const OLLAMA_EMBEDDING_MODEL =
   env.OLLAMA_EMBEDDING_MODEL ?? "qwen3-embedding";
+export const DASHSCOPE_EMBEDDING_MODEL =
+  env.DASHSCOPE_EMBEDDING_MODEL ?? "text-embedding-v4";
+export const DASHSCOPE_BASE_URL =
+  env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/api/v1";
 
 export const OLLAMA_KEEP_ALIVE = env.OLLAMA_KEEP_ALIVE ?? "24h"; // e.g. "30m", "2h", "-1"
 
@@ -42,10 +46,100 @@ export function fitToDims(vec: number[], dims = EMBEDDING_DIMS): number[] {
   return out;
 }
 
+/**
+ * Call Dashscope (Aliyun) text embedding API
+ * @param texts - Array of texts to embed (max 10 for batch)
+ * @param dims - Embedding dimensions (default 1536)
+ * @param options - Optional parameters
+ * @param options.text_type - Text type: "query" for search queries, "document" for documents to be searched
+ * @param options.instruct - Custom instruction for the embedding model
+ * @returns Array of embedding vectors
+ */
+async function callDashscopeEmbedding(
+  texts: string[],
+  dims = EMBEDDING_DIMS,
+  options?: {
+    text_type?: "query" | "document";
+    instruct?: string;
+  },
+): Promise<number[][]> {
+  if (!env.DASHSCOPE_API_KEY) {
+    throw new Error(
+      "DASHSCOPE_API_KEY environment variable is not set. Please add it to your .env file.",
+    );
+  }
+
+  // Dashscope API endpoint
+  const endpoint = `${DASHSCOPE_BASE_URL}/services/embeddings/text-embedding/text-embedding`;
+
+  // Build request body with optional parameters
+  const requestBody: any = {
+    model: DASHSCOPE_EMBEDDING_MODEL,
+    input: {
+      texts: texts,
+    },
+    parameters: {
+      dimension: dims,
+      output_type: "dense",
+    },
+  };
+
+  // Add optional text_type if provided
+  if (options?.text_type) {
+    requestBody.parameters.text_type = options.text_type;
+  }
+
+  // Add optional instruct if provided
+  if (options?.instruct) {
+    requestBody.input.instruct = options.instruct;
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.DASHSCOPE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Dashscope API error (${response.status}): ${errorText}`,
+    );
+  }
+
+  const data = await response.json();
+
+  // Parse response and extract embeddings
+  // Dashscope response format: { output: { embeddings: [{ embedding: number[], text_index: number }] } }
+  if (!data.output?.embeddings || !Array.isArray(data.output.embeddings)) {
+    throw new Error(
+      `Invalid Dashscope response format: ${JSON.stringify(data)}`,
+    );
+  }
+
+  // Sort by text_index to maintain order and extract embeddings
+  const embeddings = data.output.embeddings
+    .sort(
+      (a: any, b: any) => (a.text_index || 0) - (b.text_index || 0),
+    )
+    .map((item: any) => item.embedding);
+
+  return embeddings;
+}
+
+export interface DashscopeEmbeddingOptions {
+  text_type?: "query" | "document";
+  instruct?: string;
+}
+
 export async function embedTexts(
   provider: Provider,
   texts: string[],
   dims = EMBEDDING_DIMS,
+  options?: DashscopeEmbeddingOptions,
 ): Promise<number[][]> {
   if (provider === "openai") {
     const client = getOpenAI();
@@ -55,6 +149,21 @@ export async function embedTexts(
       dimensions: dims,
     });
     return res.data.map((d) => d.embedding);
+  }
+
+  if (provider === "dashscope") {
+    // Dashscope has a max batch size of 10 for text-embedding-v3/v4
+    const BATCH_SIZE = 10;
+    const allEmbeddings: number[][] = [];
+
+    // Process in batches of 10
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+      const batch = texts.slice(i, i + BATCH_SIZE);
+      const batchEmbeddings = await callDashscopeEmbedding(batch, dims, options);
+      allEmbeddings.push(...batchEmbeddings);
+    }
+
+    return allEmbeddings;
   }
 
   const client = getOllama();
@@ -70,8 +179,9 @@ export async function embedText(
   provider: Provider,
   text: string,
   dims = EMBEDDING_DIMS,
+  options?: DashscopeEmbeddingOptions,
 ): Promise<number[]> {
-  const embeddings = await embedTexts(provider, [text], dims);
+  const embeddings = await embedTexts(provider, [text], dims, options);
   if (embeddings.length === 0) {
     throw new Error(
       "Failed to generate embedding: embedTexts returned empty array",
