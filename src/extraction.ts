@@ -146,77 +146,112 @@ export async function extractMemoriesForUser(
     JSON.parse(memoryUpdateResult),
   );
 
-  // Step 5: Apply memory decisions and mark messages (within transaction)
-  const client = await pool.connect();
+  // Step 5: Apply memory decisions and mark messages
+  // Note: Memory operations (insertMemories, updateMemory) use separate connections
+  // from the connection pool, so they're not part of a single transaction.
+  // We track successes and failures to provide accurate counts.
+  let memoriesUpdated = 0;
+  const failedOperations: Array<{ decision: string; error: string }> = [];
+
   try {
-    await client.query("BEGIN");
-
-    let memoriesUpdated = 0;
-
+    // Process memory decisions
     for (const decision of parsedDecisions.memory) {
-      const decisionId = parseInt(decision.id, 10);
+      try {
+        const decisionId = parseInt(decision.id, 10);
 
-      if (decision.event === "ADD") {
-        // Find the corresponding fact by unified ID
-        const factIndex = decisionId - startFactId;
-        if (factIndex >= 0 && factIndex < unifiedNewFacts.length) {
-          const fact = parsedFacts.facts[factIndex];
+        if (decision.event === "ADD") {
+          // Find the corresponding fact by unified ID
+          const factIndex = decisionId - startFactId;
+          if (factIndex >= 0 && factIndex < unifiedNewFacts.length) {
+            const fact = parsedFacts.facts[factIndex];
 
-          // Insert new memory with the fact's text (or decision text if provided)
-          await insertMemories(embeddingProvider, [
-            {
-              userId: userId,
-              content: decision.text || fact.text,
+            // Insert new memory with the fact's text (or decision text if provided)
+            await insertMemories(embeddingProvider, [
+              {
+                userId: userId,
+                content: decision.text || fact.text,
+                category: fact.category,
+                importance: fact.importance,
+                confidence: fact.confidence,
+                action: "ADD",
+              },
+            ]);
+            memoriesUpdated++;
+          }
+        } else if (decision.event === "UPDATE") {
+          // Find the corresponding existing memory by unified ID
+          const memoryIndex = decisionId - 1;
+          if (memoryIndex >= 0 && memoryIndex < unifiedExistingMemories.length) {
+            const originalMemoryId =
+              unifiedExistingMemories[memoryIndex].originalId;
+
+            // Find the matching fact (if any) to get updated metadata
+            // For UPDATE events, we need to find which fact triggered this update
+            // We'll use the first fact in the list for metadata (simplified approach)
+            const fact = parsedFacts.facts[0]; // TODO: Improve this mapping logic
+
+            // Generate embedding for updated content
+            const [updatedEmbedding] = await embedTexts(embeddingProvider, [
+              decision.text,
+            ]);
+
+            // Update the memory
+            await updateMemory(userId, originalMemoryId, {
+              prevContent: unifiedExistingMemories[memoryIndex].text,
+              content: decision.text,
               category: fact.category,
               importance: fact.importance,
               confidence: fact.confidence,
-              action: "ADD",
-            },
-          ]);
-          memoriesUpdated++;
+              action: "UPDATE",
+              embedding: updatedEmbedding,
+            });
+            memoriesUpdated++;
+          }
         }
-      } else if (decision.event === "UPDATE") {
-        // Find the corresponding existing memory by unified ID
-        const memoryIndex = decisionId - 1;
-        if (memoryIndex >= 0 && memoryIndex < unifiedExistingMemories.length) {
-          const originalMemoryId =
-            unifiedExistingMemories[memoryIndex].originalId;
+      } catch (operationError) {
+        // Log individual operation failure but continue processing
+        const errorMessage =
+          operationError instanceof Error
+            ? operationError.message
+            : String(operationError);
 
-          // Find the matching fact (if any) to get updated metadata
-          // For UPDATE events, we need to find which fact triggered this update
-          // We'll use the first fact in the list for metadata (simplified approach)
-          const fact = parsedFacts.facts[0]; // TODO: Improve this mapping logic
+        console.error(
+          `Failed to process memory decision (id: ${decision.id}, event: ${decision.event}):`,
+          operationError,
+        );
 
-          // Generate embedding for updated content
-          const [updatedEmbedding] = await embedTexts(embeddingProvider, [
-            decision.text,
-          ]);
+        failedOperations.push({
+          decision: `${decision.event} ${decision.id}`,
+          error: errorMessage,
+        });
 
-          // Update the memory
-          await updateMemory(userId, originalMemoryId, {
-            prevContent: unifiedExistingMemories[memoryIndex].text,
-            content: decision.text,
-            category: fact.category,
-            importance: fact.importance,
-            confidence: fact.confidence,
-            action: "UPDATE",
-            embedding: updatedEmbedding,
-          });
-          memoriesUpdated++;
-        }
+        // Continue processing other decisions instead of failing entirely
       }
     }
 
-    // Mark all messages as extracted
+    // Mark all messages as extracted using a single batch update
     const messageIds = unextractedMessages.map((msg) => msg.id);
-    for (const msgId of messageIds) {
-      await client.query(
-        `UPDATE message SET extracted = true, updated_at = NOW() WHERE id = $1`,
-        [msgId],
-      );
+    if (messageIds.length > 0) {
+      // Use raw query with ANY to update all messages in a single query
+      // This is more efficient than N individual updates
+      const client = await pool.connect();
+      try {
+        await client.query(
+          `UPDATE message SET extracted = true, updated_at = NOW() WHERE id = ANY($1::int[])`,
+          [messageIds],
+        );
+      } finally {
+        client.release();
+      }
     }
 
-    await client.query("COMMIT");
+    // Log failed operations if any
+    if (failedOperations.length > 0) {
+      console.warn(
+        `Extraction completed with ${failedOperations.length} failed operation(s):`,
+        failedOperations,
+      );
+    }
 
     return {
       factsExtracted: parsedFacts.facts.length,
@@ -224,10 +259,9 @@ export async function extractMemoriesForUser(
       messagesExtracted: unextractedMessages.length,
     };
   } catch (error) {
-    await client.query("ROLLBACK");
+    // Fatal error - log and rethrow
+    console.error("Fatal error during memory extraction:", error);
     throw error;
-  } finally {
-    client.release();
   }
 }
 
