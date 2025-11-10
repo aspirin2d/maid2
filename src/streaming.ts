@@ -55,6 +55,8 @@ export async function streamWithAdapter(c: Context, options: StreamingOptions) {
   const { llmProvider, handler, prompt, schema, storyId } = options;
 
   return streamSSE(c, async (output) => {
+    let streamError: Error | null = null;
+
     try {
       // Handler lifecycle: start
       handler.onStart();
@@ -64,72 +66,109 @@ export async function streamWithAdapter(c: Context, options: StreamingOptions) {
       });
 
       // Stream content through provider-agnostic generator
-      for await (const ev of createProviderStream(
-        llmProvider,
-        prompt,
-        schema,
-      )) {
-        if (ev.type === "thinking") {
-          const processedContent = handler.onThinking(ev.data);
-          await output.writeSSE({
-            event: "thinking",
-            data: processedContent,
-          });
-        }
+      try {
+        for await (const ev of createProviderStream(
+          llmProvider,
+          prompt,
+          schema,
+        )) {
+          if (ev.type === "thinking") {
+            const processedContent = handler.onThinking(ev.data);
+            await output.writeSSE({
+              event: "thinking",
+              data: processedContent,
+            });
+          }
 
-        if (ev.type === "delta") {
-          const processedContent = handler.onContent(ev.data);
-          await output.writeSSE({
-            event: "delta",
-            data: processedContent,
-          });
-        }
+          if (ev.type === "delta") {
+            const processedContent = handler.onContent(ev.data);
+            await output.writeSSE({
+              event: "delta",
+              data: processedContent,
+            });
+          }
 
-        if (ev.type === "error") {
-          await output.writeSSE({ event: "error", data: ev.data });
-          break;
-        }
+          if (ev.type === "error") {
+            // Provider returned an error event
+            await output.writeSSE({ event: "error", data: ev.data });
+            streamError = new Error(ev.data);
+            break;
+          }
 
-        if (ev.type === "done") break;
+          if (ev.type === "done") break;
+        }
+      } catch (streamErr) {
+        // Error during streaming (network, provider error, etc.)
+        const errorMessage = streamErr instanceof Error
+          ? streamErr.message
+          : String(streamErr);
+
+        console.error(`${llmProvider} streaming error:`, streamErr);
+
+        await output.writeSSE({
+          event: "error",
+          data: errorMessage,
+        });
+
+        streamError = streamErr instanceof Error
+          ? streamErr
+          : new Error(errorMessage);
       }
 
       // Handler lifecycle: finish - returns messages to persist
-      const result = await handler.onFinish();
+      // Only persist if there was no streaming error
+      if (!streamError) {
+        try {
+          const result = await handler.onFinish();
 
-      // Persistence layer - decoupled from handler logic
-      const messages = [];
-      if (result.userMessage) {
-        messages.push({
-          storyId,
-          role: "user" as const,
-          content: result.userMessage,
-        });
-      }
-      if (result.assistantMessage) {
-        messages.push({
-          storyId,
-          role: "assistant" as const,
-          content: result.assistantMessage,
-        });
+          // Persistence layer - decoupled from handler logic
+          const messages = [];
+          if (result.userMessage) {
+            messages.push({
+              storyId,
+              role: "user" as const,
+              content: result.userMessage,
+            });
+          }
+          if (result.assistantMessage) {
+            messages.push({
+              storyId,
+              role: "assistant" as const,
+              content: result.assistantMessage,
+            });
+          }
+
+          if (messages.length > 0) {
+            await bulkInsertMessages(messages);
+          }
+        } catch (persistErr) {
+          // Error during persistence - log but don't fail the stream
+          console.error(`${llmProvider} message persistence error:`, persistErr);
+
+          await output.writeSSE({
+            event: "error",
+            data: `Failed to save messages: ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`,
+          });
+        }
       }
 
-      if (messages.length > 0) {
-        await bulkInsertMessages(messages);
-      }
-
-      // Send finish event
+      // Always send finish event to properly close the stream
       await output.writeSSE({
         event: "finish",
         data: "stream-finished",
       });
     } catch (e) {
-      console.error(`${llmProvider} streaming error:`, e);
+      // Unexpected error in adapter logic
+      console.error(`${llmProvider} adapter error:`, e);
+
+      await output.writeSSE({
+        event: "error",
+        data: `Unexpected error: ${e instanceof Error ? e.message : String(e)}`,
+      });
+
       await output.writeSSE({
         event: "finish",
-        data: JSON.stringify({
-          done: true,
-          error: e instanceof Error ? e.message : String(e),
-        }),
+        data: "stream-finished",
       });
     }
   });
