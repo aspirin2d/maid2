@@ -4,7 +4,7 @@
  */
 
 import type { LiveClip } from "../types.js";
-import { setLastLiveSpeechClips, clearLastLiveSpeechClips } from "./state.js";
+import { setLastLiveSpeechClips, clearLastLiveSpeechClips, setLastLiveClips, clearLastLiveClips } from "./state.js";
 
 /**
  * Format and display live handler output (VTuber clips)
@@ -14,6 +14,7 @@ export function formatLiveHandlerOutput(payload: string): boolean {
   const raw = payload.trim();
   if (!raw) {
     clearLastLiveSpeechClips();
+    clearLastLiveClips();
     return false;
   }
 
@@ -22,19 +23,25 @@ export function formatLiveHandlerOutput(payload: string): boolean {
     parsed = JSON.parse(raw);
   } catch {
     clearLastLiveSpeechClips();
+    clearLastLiveClips();
     return false;
   }
 
   if (!parsed || typeof parsed !== "object") {
     clearLastLiveSpeechClips();
+    clearLastLiveClips();
     return false;
   }
 
   const data = parsed as { clips?: LiveClip[] };
   if (!Array.isArray(data.clips) || data.clips.length === 0) {
     clearLastLiveSpeechClips();
+    clearLastLiveClips();
     return false;
   }
+
+  // Store the clips for clip search
+  setLastLiveClips(data.clips);
 
   const speechSnippets = data.clips
     .map((clip) => clip?.speech || clip?.text || clip?.content || clip?.message)

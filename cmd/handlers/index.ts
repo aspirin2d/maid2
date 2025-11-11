@@ -19,6 +19,10 @@ export {
   getLastLiveSpeechClips,
   clearLastLiveSpeechClips,
   setLiveSpeechHotkeyHandler,
+  getLastLiveClips,
+  setLastLiveClips,
+  clearLastLiveClips,
+  setLiveClipSearchHandler,
 } from "./live/index.js";
 
 // Export types
