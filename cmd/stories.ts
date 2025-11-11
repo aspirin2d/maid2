@@ -25,7 +25,7 @@ import {
   getLastLiveSpeechClips,
   setLiveSpeechHotkeyHandler,
   clearLastLiveSpeechClips,
-} from "./handlers.js";
+} from "./handlers/index.js";
 import { apiFetch } from "./api.js";
 import {
   EMBEDDING_PROVIDERS,
