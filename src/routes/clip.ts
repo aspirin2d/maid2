@@ -12,13 +12,17 @@ const searchQuerySchema = z.object({
   topK: z.coerce.number().int().min(1).max(100).optional().default(10),
   originId: z.string().optional(),
   minSimilarity: z.coerce.number().min(0).max(1).optional(),
-  provider: z.enum(["openai", "ollama"]).optional().default("openai"),
+  provider: z
+    .enum(["openai", "ollama", "dashscope"])
+    .optional()
+    .default("dashscope"),
 });
 
 app.get("/search", requireAuth, async (c) => {
   const queryParams = c.req.query();
   const parsed = searchQuerySchema.safeParse(queryParams);
 
+  console.log("parsed", parsed);
   if (!parsed.success) {
     return c.json(
       {

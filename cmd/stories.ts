@@ -432,11 +432,7 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
         }
 
         const command = userInput.toLowerCase();
-        if (
-          command === "/exit" ||
-          command === "/back" ||
-          command === "/quit"
-        ) {
+        if (command === "/exit" || command === "/back" || command === "/quit") {
           console.log("Leaving chat.");
           return;
         }
@@ -501,22 +497,22 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
         }
       }
 
-    // Display user input
-    const displayMessage =
-      typeof userInput === "string"
-        ? userInput
-        : JSON.stringify(userInput, null, 2);
-    console.log(`\nYou: ${displayMessage}`);
+      // Display user input
+      const displayMessage =
+        typeof userInput === "string"
+          ? userInput
+          : JSON.stringify(userInput, null, 2);
+      console.log(`\nYou: ${displayMessage}`);
 
-    // Stream the conversation
-    await streamStoryConversation({
-      token,
-      storyId: storyRecord.id,
-      handler,
-      embeddingProvider,
-      llmProvider,
-      input: userInput,
-    });
+      // Stream the conversation
+      await streamStoryConversation({
+        token,
+        storyId: storyRecord.id,
+        handler,
+        embeddingProvider,
+        llmProvider,
+        input: userInput,
+      });
     }
   } finally {
     setLiveSpeechHotkeyHandler(null);
@@ -590,9 +586,7 @@ async function selectEmbeddingProvider(
   }
 }
 
-async function selectLlmProvider(
-  current?: LlmProviderOption | string | null,
-) {
+async function selectLlmProvider(current?: LlmProviderOption | string | null) {
   const normalized =
     typeof current === "string" &&
     LLM_PROVIDERS.includes(current as LlmProviderOption)
@@ -751,13 +745,17 @@ async function streamStoryConversation({
 async function generateLiveSpeechFromLastResponse(token: string) {
   const speechClips = getLastLiveSpeechClips();
   if (speechClips.length === 0) {
-    console.log("\n[Live TTS] No VTuber speech available yet. Send a prompt first.");
+    console.log(
+      "\n[Live TTS] No VTuber speech available yet. Send a prompt first.",
+    );
     return;
   }
 
   const combined = speechClips.join("\n\n").trim();
   if (!combined) {
-    console.log("\n[Live TTS] Unable to find speech text in the last response.");
+    console.log(
+      "\n[Live TTS] Unable to find speech text in the last response.",
+    );
     return;
   }
 
@@ -802,7 +800,9 @@ async function generateLiveSpeechFromLastResponse(token: string) {
   );
 
   if (!data) {
-    console.log("[Live TTS] Generated speech but received an empty response body.");
+    console.log(
+      "[Live TTS] Generated speech but received an empty response body.",
+    );
     return;
   }
 
@@ -827,7 +827,9 @@ async function searchClipsFromLastResponse(
 ) {
   const clips = getLastLiveClips();
   if (clips.length === 0) {
-    console.log("\n[Clip Search] No VTuber clips available yet. Send a prompt first.");
+    console.log(
+      "\n[Clip Search] No VTuber clips available yet. Send a prompt first.",
+    );
     return;
   }
 
@@ -843,20 +845,25 @@ async function searchClipsFromLastResponse(
     try {
       console.log(`\nClip #${index + 1} - Searching for: "${bodyText}"`);
 
+      const providerForSearch = embeddingProvider;
+
+      const searchParams = new URLSearchParams({
+        q: bodyText,
+        topK: String(5),
+        minSimilarity: String(0.5),
+      });
+
+      if (providerForSearch) {
+        searchParams.set("provider", providerForSearch);
+      }
+
       const response = await apiFetch(
-        "/api/v1/clips/search",
+        `/api/v1/clips/search?${searchParams.toString()}`,
         {
-          method: "POST",
+          method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            query: bodyText,
-            provider: embeddingProvider,
-            topK: 5,
-            minSimilarity: 0.5,
-          }),
         },
         "app",
       );
@@ -875,15 +882,22 @@ async function searchClipsFromLastResponse(
         results.forEach((result: any, i: number) => {
           const similarity = result.similarity ?? 0;
           const clipData = result.clip ?? {};
-          console.log(`  ${i + 1}. [${(similarity * 100).toFixed(1)}%] ${clipData.videoUrl ?? "N/A"}`);
+          console.log(
+            `  ${i + 1}. [${(similarity * 100).toFixed(1)}%] ${clipData.videoUrl ?? "N/A"}`,
+          );
           console.log(`     Description: ${clipData.description ?? "N/A"}`);
-          console.log(`     Frames: ${clipData.startFrame ?? "?"}-${clipData.endFrame ?? "?"}`);
+          console.log(
+            `     Frames: ${clipData.startFrame ?? "?"}-${clipData.endFrame ?? "?"}`,
+          );
         });
       } else {
         console.log(`[Clip Search] No similar clips found.`);
       }
     } catch (error) {
-      console.error(`[Clip Search] Failed to search clips for "${bodyText}":`, error);
+      console.error(
+        `[Clip Search] Failed to search clips for "${bodyText}":`,
+        error,
+      );
     }
   }
   console.log(""); // Add spacing
