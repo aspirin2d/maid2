@@ -160,8 +160,8 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
       devLog('init', 'Building prompt...');
       const prompt = await buildPrompt(normalizedEvent, ctx, config);
       devLog('init', 'Prompt built', {
-        messageCount: prompt.length,
-        lastMessagePreview: prompt[prompt.length - 1]?.content?.toString().slice(0, 150),
+        length: prompt.length,
+        preview: prompt.slice(0, 150),
       });
 
       devLog('init', '=== Initialization complete ===');
