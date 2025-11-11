@@ -17,6 +17,7 @@ import {
   type LiveInput,
 } from "./events.js";
 import { parseLLMResponse, validateInput } from "./utils.js";
+import { searchSimilarClipsByText } from "../../clip.js";
 
 /**
  * Check if we're in development mode for detailed logging
@@ -212,6 +213,40 @@ const factory = (ctx: StoryContext, config?: HandlerConfig): StoryHandler => {
           clipCount: parseResult.data?.clips?.length,
           clips: parseResult.data?.clips,
         });
+
+        // Search for similar clips based on body text (s command)
+        if (parseResult.data?.clips && parseResult.data.clips.length > 0) {
+          console.log('\n[LiveHandler:ClipSearch] Searching for similar clips...');
+
+          // Use llmProvider from context, default to openai if not specified
+          const provider = ctx.llmProvider || "openai";
+
+          for (const [index, clip] of parseResult.data.clips.entries()) {
+            try {
+              console.log(`\n[LiveHandler:ClipSearch] Clip #${index + 1} - Searching for: "${clip.body}"`);
+
+              const results = await searchSimilarClipsByText(
+                provider,
+                clip.body,
+                { topK: 5, minSimilarity: 0.5 }
+              );
+
+              if (results.length > 0) {
+                console.log(`[LiveHandler:ClipSearch] Found ${results.length} similar clips:`);
+                results.forEach((result, i) => {
+                  console.log(`  ${i + 1}. [${(result.similarity * 100).toFixed(1)}%] ${result.clip.videoUrl}`);
+                  console.log(`     Description: ${result.clip.description}`);
+                  console.log(`     Frames: ${result.clip.startFrame}-${result.clip.endFrame}`);
+                });
+              } else {
+                console.log(`[LiveHandler:ClipSearch] No similar clips found.`);
+              }
+            } catch (error) {
+              console.error(`[LiveHandler:ClipSearch] Failed to search clips for "${clip.body}":`, error);
+            }
+          }
+          console.log(''); // Add spacing
+        }
       } else {
         devLog('finish', 'Parse FAILED', {
           error: parseResult.error,
