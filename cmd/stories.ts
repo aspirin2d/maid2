@@ -25,6 +25,9 @@ import {
   getLastLiveSpeechClips,
   setLiveSpeechHotkeyHandler,
   clearLastLiveSpeechClips,
+  getLastLiveClips,
+  setLiveClipSearchHandler,
+  clearLastLiveClips,
 } from "./handlers/index.js";
 import { apiFetch } from "./api.js";
 import {
@@ -392,13 +395,19 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
       setLiveSpeechHotkeyHandler(() =>
         generateLiveSpeechFromLastResponse(token),
       );
+      setLiveClipSearchHandler(() =>
+        searchClipsFromLastResponse(token, embeddingProvider),
+      );
     } else {
       setLiveSpeechHotkeyHandler(null);
       clearLastLiveSpeechClips();
+      setLiveClipSearchHandler(null);
+      clearLastLiveClips();
     }
   };
 
   clearLastLiveSpeechClips();
+  clearLastLiveClips();
   syncLiveHotkey();
 
   try {
@@ -512,6 +521,8 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
   } finally {
     setLiveSpeechHotkeyHandler(null);
     clearLastLiveSpeechClips();
+    setLiveClipSearchHandler(null);
+    clearLastLiveClips();
   }
 }
 
@@ -808,6 +819,74 @@ async function generateLiveSpeechFromLastResponse(token: string) {
   if (data.finish_reason) {
     console.log(`[Live TTS] Finish reason: ${data.finish_reason}`);
   }
+}
+
+async function searchClipsFromLastResponse(
+  token: string,
+  embeddingProvider: EmbeddingProviderOption,
+) {
+  const clips = getLastLiveClips();
+  if (clips.length === 0) {
+    console.log("\n[Clip Search] No VTuber clips available yet. Send a prompt first.");
+    return;
+  }
+
+  console.log("\n[Clip Search] Searching for similar clips...");
+
+  for (const [index, clip] of clips.entries()) {
+    const bodyText = clip.body;
+    if (!bodyText) {
+      console.log(`\nClip #${index + 1}: No body text to search for.`);
+      continue;
+    }
+
+    try {
+      console.log(`\nClip #${index + 1} - Searching for: "${bodyText}"`);
+
+      const response = await apiFetch(
+        "/api/v1/clips/search",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: bodyText,
+            provider: embeddingProvider,
+            topK: 5,
+            minSimilarity: 0.5,
+          }),
+        },
+        "app",
+      );
+
+      if (!response.ok) {
+        const message = await extractErrorMessage(response);
+        console.log(`[Clip Search] Failed: ${message}`);
+        continue;
+      }
+
+      const data = await parseJSON<{ results?: any[] }>(response);
+      const results = data?.results ?? [];
+
+      if (results.length > 0) {
+        console.log(`[Clip Search] Found ${results.length} similar clips:`);
+        results.forEach((result: any, i: number) => {
+          const similarity = result.similarity ?? 0;
+          const clipData = result.clip ?? {};
+          console.log(`  ${i + 1}. [${(similarity * 100).toFixed(1)}%] ${clipData.videoUrl ?? "N/A"}`);
+          console.log(`     Description: ${clipData.description ?? "N/A"}`);
+          console.log(`     Frames: ${clipData.startFrame ?? "?"}-${clipData.endFrame ?? "?"}`);
+        });
+      } else {
+        console.log(`[Clip Search] No similar clips found.`);
+      }
+    } catch (error) {
+      console.error(`[Clip Search] Failed to search clips for "${bodyText}":`, error);
+    }
+  }
+  console.log(""); // Add spacing
 }
 
 async function tryPlayAudioWithAfplay(audioUrl: string) {

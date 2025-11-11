@@ -13,7 +13,7 @@ import {
   isDownKey,
 } from "@inquirer/core";
 import type { EventSelectConfig } from "../types.js";
-import { triggerLiveSpeechHotkey } from "./state.js";
+import { triggerLiveSpeechHotkey, triggerLiveClipSearch } from "./state.js";
 
 /**
  * Custom prompt for event selection with number key shortcuts
@@ -42,6 +42,14 @@ const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
       if (k === "g") {
         void (async () => {
           await triggerLiveSpeechHotkey();
+          rl.write("");
+        })();
+        return;
+      }
+
+      if (k === "s") {
+        void (async () => {
+          await triggerLiveClipSearch();
           rl.write("");
         })();
         return;
@@ -77,7 +85,7 @@ const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
       return `${caret} [${indexNum}] ${choice.name}`;
     });
 
-    const help = `↑/↓ move   1-9/0=select   Enter=confirm   g=Speech TTS   Esc=cancel`;
+    const help = `↑/↓ move   1-9/0=select   Enter=confirm   g=Speech TTS   s=Search clips   Esc=cancel`;
 
     return [`${prefix} ${message}`, ...lines, "", help].join("\n");
   },

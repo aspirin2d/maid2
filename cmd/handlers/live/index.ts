@@ -10,5 +10,10 @@ export {
   clearLastLiveSpeechClips,
   setLiveSpeechHotkeyHandler,
   triggerLiveSpeechHotkey,
+  getLastLiveClips,
+  setLastLiveClips,
+  clearLastLiveClips,
+  setLiveClipSearchHandler,
+  triggerLiveClipSearch,
 } from "./state.js";
 export { eventSelectPrompt } from "./prompt.js";
