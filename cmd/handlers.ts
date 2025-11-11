@@ -15,6 +15,7 @@ import {
   isEnterKey,
   isUpKey,
   isDownKey,
+  ExitPromptError,
 } from "@inquirer/core";
 
 // ============================================================================
@@ -97,8 +98,7 @@ const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
       }
 
       if (k === "escape") {
-        rl.close();
-        return;
+        throw new ExitPromptError();
       }
     });
 
