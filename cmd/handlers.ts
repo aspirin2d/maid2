@@ -15,6 +15,7 @@ import {
   isEnterKey,
   isUpKey,
   isDownKey,
+  ExitPromptError,
 } from "@inquirer/core";
 
 // ============================================================================
@@ -97,8 +98,7 @@ const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
       }
 
       if (k === "escape") {
-        rl.close();
-        return;
+        throw new ExitPromptError();
       }
     });
 
@@ -140,12 +140,8 @@ async function buildLiveHandlerInput(): Promise<unknown> {
     choices: [
       { name: "Simple chat", value: "simple_chat" },
       { name: "User chat", value: "user_chat" },
-      { name: "Bullet chat (弹幕)", value: "bullet_chat" },
-      { name: "Program event", value: "program_event" },
       { name: "Gift event", value: "gift_event" },
-      { name: "User interaction", value: "user_interaction" },
-      { name: "System event", value: "system_event" },
-      { name: "Emotion event", value: "emotion_event" },
+      { name: "Program event", value: "program_event" },
       { name: "Clear story (/clear)", value: "command_clear" },
       { name: "Exit chat (/exit)", value: "command_exit" },
     ],
@@ -181,34 +177,6 @@ async function buildLiveHandlerInput(): Promise<unknown> {
         data: {
           message,
           ...(username.trim() && { username: username.trim() }),
-          timestamp: Date.now(),
-        },
-      };
-    }
-
-    case "bullet_chat": {
-      const message = await input({
-        message: "Bullet chat message",
-        validate: requiredField("Message"),
-      });
-      const username = await input({
-        message: "Username (optional, press Enter to skip)",
-      });
-      const position = await select({
-        message: "Display position",
-        choices: [
-          { name: "Scroll", value: "scroll" },
-          { name: "Top", value: "top" },
-          { name: "Bottom", value: "bottom" },
-        ],
-        default: "scroll",
-      });
-      return {
-        type: "bullet_chat",
-        data: {
-          message,
-          ...(username.trim() && { username: username.trim() }),
-          position,
           timestamp: Date.now(),
         },
       };
@@ -306,118 +274,6 @@ async function buildLiveHandlerInput(): Promise<unknown> {
 
       return {
         type: "gift_event",
-        data,
-      };
-    }
-
-    case "user_interaction": {
-      const action = await select({
-        message: "Interaction type",
-        choices: [
-          { name: "Follow (关注)", value: "follow" },
-          { name: "Subscribe (订阅)", value: "subscribe" },
-          { name: "Like (点赞)", value: "like" },
-          { name: "Share (分享)", value: "share" },
-        ],
-      });
-      const username = await input({
-        message: "Username",
-        validate: requiredField("Username"),
-      });
-      const data: any = {
-        action,
-        username,
-      };
-
-      if (action === "subscribe") {
-        const tier = await input({
-          message: "Subscription tier (optional, press Enter to skip)",
-        });
-        const monthsInput = await input({
-          message: "Subscription months (optional, press Enter to skip)",
-        });
-
-        if (tier.trim()) {
-          data.tier = tier.trim();
-        }
-        if (monthsInput.trim()) {
-          const months = parseInt(monthsInput, 10);
-          if (!isNaN(months)) {
-            data.months = months;
-          }
-        }
-      }
-
-      return {
-        type: "user_interaction",
-        data,
-      };
-    }
-
-    case "system_event": {
-      const eventTypeStr = await input({
-        message: "Event type (e.g., stream_start, technical_issue)",
-        validate: requiredField("Event type"),
-      });
-      const message = await input({
-        message: "System message (optional, press Enter to skip)",
-      });
-      const severity = await select({
-        message: "Severity",
-        choices: [
-          { name: "Info", value: "info" },
-          { name: "Warning", value: "warning" },
-          { name: "Error", value: "error" },
-        ],
-        default: "info",
-      });
-      return {
-        type: "system_event",
-        data: {
-          eventType: eventTypeStr,
-          ...(message.trim() && { message: message.trim() }),
-          severity,
-        },
-      };
-    }
-
-    case "emotion_event": {
-      const emotion = await input({
-        message: "Emotion (e.g., happy, excited, tired, surprised)",
-        validate: requiredField("Emotion"),
-      });
-      const intensityInput = await input({
-        message: "Intensity 0-1 (optional, press Enter to skip)",
-      });
-      const trigger = await input({
-        message: "Trigger/reason (optional, press Enter to skip)",
-      });
-      const durationInput = await input({
-        message: "Duration in seconds (optional, press Enter to skip)",
-      });
-
-      const data: any = {
-        emotion,
-      };
-
-      if (intensityInput.trim()) {
-        const intensity = parseFloat(intensityInput);
-        if (!isNaN(intensity) && intensity >= 0 && intensity <= 1) {
-          data.intensity = intensity;
-        }
-      }
-      if (trigger.trim()) {
-        data.trigger = trigger.trim();
-      }
-      if (durationInput.trim()) {
-        const duration = parseInt(durationInput, 10);
-        if (!isNaN(duration)) {
-          data.duration = duration;
-        }
-      }
-
-      return {
-        type: "emotion_event",
         data,
       };
     }
