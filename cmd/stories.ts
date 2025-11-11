@@ -1,3 +1,8 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import process from "node:process";
 import { confirm, input, select } from "@inquirer/prompts";
 
 import {
@@ -14,7 +19,13 @@ import {
   type StoryRecord,
   type StoryHandlerInfo,
 } from "./core.js";
-import { buildHandlerInput, formatHandlerOutput } from "./handlers.js";
+import {
+  buildHandlerInput,
+  formatHandlerOutput,
+  getLastLiveSpeechClips,
+  setLiveSpeechHotkeyHandler,
+  clearLastLiveSpeechClips,
+} from "./handlers.js";
 import { apiFetch } from "./api.js";
 import {
   EMBEDDING_PROVIDERS,
@@ -38,6 +49,10 @@ type StreamArgs = {
   llmProvider: LlmProviderOption;
   input: unknown;
 };
+
+const LIVE_TTS_MAX_CHARS = 600;
+const LIVE_TTS_VOICE = process.env.LIVE_TTS_VOICE?.trim() || "Stella";
+const LIVE_TTS_LANGUAGE = "Auto";
 
 // ============================================================================
 // Story Management
@@ -372,90 +387,110 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
     `Using handler "${handler}", embedding provider "${embeddingProvider}", and LLM provider "${llmProvider}".`,
   );
 
-  while (true) {
-    // Build handler-specific input (uses handler registry)
-    let userInput: unknown;
-    try {
-      userInput = await buildHandlerInput(handler);
-    } catch (error) {
-      if (isPromptAbortError(error)) {
-        console.log("\nLeaving chat.");
-        return;
-      }
-      throw error;
+  const syncLiveHotkey = () => {
+    if (handler === "live") {
+      setLiveSpeechHotkeyHandler(() =>
+        generateLiveSpeechFromLastResponse(token),
+      );
+    } else {
+      setLiveSpeechHotkeyHandler(null);
+      clearLastLiveSpeechClips();
     }
+  };
 
-    // Handle string commands
-    if (typeof userInput === "string") {
-      if (!userInput) {
-        console.log("Message cannot be empty.");
-        continue;
+  clearLastLiveSpeechClips();
+  syncLiveHotkey();
+
+  try {
+    while (true) {
+      // Build handler-specific input (uses handler registry)
+      let userInput: unknown;
+      try {
+        userInput = await buildHandlerInput(handler);
+      } catch (error) {
+        if (isPromptAbortError(error)) {
+          console.log("\nLeaving chat.");
+          return;
+        }
+        throw error;
       }
 
-      const command = userInput.toLowerCase();
-      if (command === "/exit" || command === "/back" || command === "/quit") {
-        console.log("Leaving chat.");
-        return;
-      }
+      // Handle string commands
+      if (typeof userInput === "string") {
+        if (!userInput) {
+          console.log("Message cannot be empty.");
+          continue;
+        }
 
-      if (command === "/clear") {
-        try {
-          const confirmed = await confirm({
-            message:
-              "Are you sure you want to clear all messages from this story?",
-            default: false,
-          });
+        const command = userInput.toLowerCase();
+        if (
+          command === "/exit" ||
+          command === "/back" ||
+          command === "/quit"
+        ) {
+          console.log("Leaving chat.");
+          return;
+        }
 
-          if (confirmed) {
-            const deletedCount = await clearStoryMessagesRequest(
-              token,
-              storyRecord.id,
-            );
-            if (deletedCount !== null) {
-              console.log(
-                `Cleared ${deletedCount} message(s) from this story.`,
+        if (command === "/clear") {
+          try {
+            const confirmed = await confirm({
+              message:
+                "Are you sure you want to clear all messages from this story?",
+              default: false,
+            });
+
+            if (confirmed) {
+              const deletedCount = await clearStoryMessagesRequest(
+                token,
+                storyRecord.id,
               );
+              if (deletedCount !== null) {
+                console.log(
+                  `Cleared ${deletedCount} message(s) from this story.`,
+                );
+              }
+            } else {
+              console.log("Clear cancelled.");
             }
-          } else {
-            console.log("Clear cancelled.");
+          } catch (error) {
+            if (isPromptAbortError(error)) {
+              console.log("Clear cancelled.");
+            } else {
+              throw error;
+            }
           }
-        } catch (error) {
-          if (isPromptAbortError(error)) {
-            console.log("Clear cancelled.");
-          } else {
-            throw error;
+          continue;
+        }
+
+        if (command === "/handler") {
+          const next = await selectStoryHandler(token, storyRecord.id, handler);
+          if (next) {
+            handler = next;
+            console.log(`Using handler "${handler}".`);
+            syncLiveHotkey();
           }
+          continue;
         }
-        continue;
-      }
 
-      if (command === "/handler") {
-        const next = await selectStoryHandler(token, storyRecord.id, handler);
-        if (next) {
-          handler = next;
-          console.log(`Using handler "${handler}".`);
+        if (command === "/embedding") {
+          const nextProvider = await selectEmbeddingProvider(embeddingProvider);
+          if (nextProvider) {
+            embeddingProvider = nextProvider;
+            console.log(`Using embedding provider "${embeddingProvider}".`);
+          }
+          continue;
         }
-        continue;
-      }
 
-      if (command === "/embedding") {
-        const nextProvider = await selectEmbeddingProvider(embeddingProvider);
-        if (nextProvider) {
-          embeddingProvider = nextProvider;
-          console.log(`Using embedding provider "${embeddingProvider}".`);
+        if (command === "/llm") {
+          const nextProvider = await selectLlmProvider(llmProvider);
+          if (nextProvider) {
+            llmProvider = nextProvider;
+            console.log(`Using LLM provider "${llmProvider}".`);
+          }
+          continue;
         }
-        continue;
       }
-
-      if (command === "/llm") {
-        const nextProvider = await selectLlmProvider(llmProvider);
-        if (nextProvider) {
-          llmProvider = nextProvider;
-          console.log(`Using LLM provider "${llmProvider}".`);
-        }
-        continue;
-      }
-    }
 
     // Display user input
     const displayMessage =
@@ -473,6 +508,10 @@ async function chatWithStory(token: string, storyRecord: StoryRecord) {
       llmProvider,
       input: userInput,
     });
+    }
+  } finally {
+    setLiveSpeechHotkeyHandler(null);
+    clearLastLiveSpeechClips();
   }
 }
 
@@ -696,6 +735,148 @@ async function streamStoryConversation({
     // Still show raw data even if parsing is skipped due to errors.
     displayRawResponse(collected);
   }
+}
+
+async function generateLiveSpeechFromLastResponse(token: string) {
+  const speechClips = getLastLiveSpeechClips();
+  if (speechClips.length === 0) {
+    console.log("\n[Live TTS] No VTuber speech available yet. Send a prompt first.");
+    return;
+  }
+
+  const combined = speechClips.join("\n\n").trim();
+  if (!combined) {
+    console.log("\n[Live TTS] Unable to find speech text in the last response.");
+    return;
+  }
+
+  let text = combined;
+  let truncated = false;
+  if (text.length > LIVE_TTS_MAX_CHARS) {
+    text = `${text.slice(0, LIVE_TTS_MAX_CHARS - 1).trimEnd()}…`;
+    truncated = true;
+  }
+
+  console.log(
+    `\n[Live TTS] Generating speech with voice "${LIVE_TTS_VOICE}"${
+      truncated ? ` (truncated to ${LIVE_TTS_MAX_CHARS} chars)` : ""
+    }…`,
+  );
+
+  const response = await apiFetch(
+    "/api/v1/tts",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        voice: LIVE_TTS_VOICE,
+        language_type: LIVE_TTS_LANGUAGE,
+      }),
+    },
+    "app",
+  );
+
+  if (!response.ok) {
+    const message = await extractErrorMessage(response);
+    console.log(`[Live TTS] Failed: ${message}`);
+    return;
+  }
+
+  const data = await parseJSON<{ audio_url?: string; finish_reason?: string }>(
+    response,
+  );
+
+  if (!data) {
+    console.log("[Live TTS] Generated speech but received an empty response body.");
+    return;
+  }
+
+  if (typeof data.audio_url === "string" && data.audio_url.trim()) {
+    const audioUrl = data.audio_url.trim();
+    console.log(`[Live TTS] Audio URL: ${audioUrl}`);
+    await tryPlayAudioWithAfplay(audioUrl);
+  } else {
+    console.log(
+      "[Live TTS] Speech request succeeded but did not include an audio URL.",
+    );
+  }
+
+  if (data.finish_reason) {
+    console.log(`[Live TTS] Finish reason: ${data.finish_reason}`);
+  }
+}
+
+async function tryPlayAudioWithAfplay(audioUrl: string) {
+  if (process.platform !== "darwin") {
+    return false;
+  }
+
+  console.log("[Live TTS] Attempting to play audio via afplay…");
+
+  let tempDir: string | null = null;
+  try {
+    const response = await fetch(audioUrl);
+    if (!response.ok) {
+      console.log(
+        `[Live TTS] Unable to download audio for playback: ${response.status} ${response.statusText}`,
+      );
+      return false;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "maid-tts-"));
+    const extension = resolveAudioExtension(audioUrl);
+    const tempFile = path.join(tempDir, `speech${extension}`);
+    await fs.writeFile(tempFile, buffer);
+
+    await new Promise<void>((resolve, reject) => {
+      const player = spawn("afplay", [tempFile], { stdio: "ignore" });
+      player.on("error", reject);
+      player.on("exit", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`afplay exited with code ${code ?? "unknown"}`));
+        }
+      });
+    });
+
+    console.log("[Live TTS] Playback finished.");
+    return true;
+  } catch (error) {
+    console.log(
+      `[Live TTS] Unable to auto-play audio: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return false;
+  } finally {
+    if (tempDir) {
+      try {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+}
+
+function resolveAudioExtension(audioUrl: string) {
+  try {
+    const pathname = new URL(audioUrl).pathname;
+    const lastSegment = pathname.split("/").pop() ?? "";
+    const dotIndex = lastSegment.lastIndexOf(".");
+    if (dotIndex > -1 && dotIndex < lastSegment.length - 1) {
+      return lastSegment.slice(dotIndex);
+    }
+  } catch {
+    // Ignore URL parsing errors and fall back to default extension
+  }
+  return ".mp3";
 }
 
 async function fetchHandlers(

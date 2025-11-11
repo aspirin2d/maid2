@@ -35,6 +35,60 @@ type HandlerInputBuilder = () => Promise<unknown>;
  */
 type HandlerOutputFormatter = (payload: string) => boolean;
 
+type LiveClip = {
+  body?: string;
+  face?: string;
+  speech?: string;
+  text?: string;
+  content?: string;
+  message?: string;
+};
+
+type LiveSpeechHotkeyHandler = () => Promise<void> | void;
+
+let lastLiveSpeechClips: string[] = [];
+let liveSpeechHotkeyHandler: LiveSpeechHotkeyHandler | null = null;
+let isHotkeyRunning = false;
+
+export function getLastLiveSpeechClips() {
+  return lastLiveSpeechClips.slice();
+}
+
+function setLastLiveSpeechClips(clips: string[]) {
+  lastLiveSpeechClips = clips;
+}
+
+export function clearLastLiveSpeechClips() {
+  lastLiveSpeechClips = [];
+}
+
+export function setLiveSpeechHotkeyHandler(handler: LiveSpeechHotkeyHandler | null) {
+  liveSpeechHotkeyHandler = handler;
+}
+
+async function triggerLiveSpeechHotkey() {
+  if (!liveSpeechHotkeyHandler) {
+    console.log("\nNo VTuber speech is available yet.");
+    return;
+  }
+
+  if (isHotkeyRunning) {
+    return;
+  }
+
+  isHotkeyRunning = true;
+  try {
+    await liveSpeechHotkeyHandler();
+  } catch (error) {
+    console.error(
+      "Failed to generate speech:",
+      error instanceof Error ? error.message : error,
+    );
+  } finally {
+    isHotkeyRunning = false;
+  }
+}
+
 /**
  * Simple choice for event selection
  */
@@ -79,6 +133,14 @@ const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
 
       const k = (key.name || "").toLowerCase();
 
+      if (k === "g") {
+        void (async () => {
+          await triggerLiveSpeechHotkey();
+          rl.write("");
+        })();
+        return;
+      }
+
       // Handle number key selection (1-9 and 0 for 10)
       if (k >= "0" && k <= "9") {
         const num = k === "0" ? 10 : parseInt(k, 10);
@@ -109,7 +171,7 @@ const rawEventSelectPrompt = createPrompt<string, EventSelectConfig<string>>(
       return `${caret} [${indexNum}] ${choice.name}`;
     });
 
-    const help = `↑/↓ move   1-9/0=select   Enter=confirm   Esc=cancel`;
+    const help = `↑/↓ move   1-9/0=select   Enter=confirm   g=Speech TTS   Esc=cancel`;
 
     return [`${prefix} ${message}`, ...lines, "", help].join("\n");
   },
@@ -139,7 +201,6 @@ async function buildLiveHandlerInput(): Promise<unknown> {
     const eventType = await eventSelectPrompt({
       message: "Choose event type",
       choices: [
-        { name: "Simple chat", value: "simple_chat" },
         { name: "User chat", value: "user_chat" },
         { name: "Gift event", value: "gift_event" },
         { name: "Program event", value: "program_event" },
@@ -154,13 +215,6 @@ async function buildLiveHandlerInput(): Promise<unknown> {
     }
     if (eventType === "command_exit") {
       return "/exit";
-    }
-    if (eventType === "simple_chat") {
-      const text = await input({
-        message: "Enter your message",
-        validate: requiredField("Message"),
-      });
-      return text;
     }
 
     // Build event-specific data
@@ -306,24 +360,39 @@ async function buildLiveHandlerInput(): Promise<unknown> {
  */
 function formatLiveHandlerOutput(payload: string): boolean {
   const raw = payload.trim();
-  if (!raw) return false;
+  if (!raw) {
+    clearLastLiveSpeechClips();
+    return false;
+  }
 
   let parsed: unknown = null;
   try {
     parsed = JSON.parse(raw);
   } catch {
+    clearLastLiveSpeechClips();
     return false;
   }
 
   if (!parsed || typeof parsed !== "object") {
+    clearLastLiveSpeechClips();
     return false;
   }
 
-  const data = parsed as {
-    clips?: Array<{ body?: string; face?: string; speech?: string }>;
-  };
+  const data = parsed as { clips?: LiveClip[] };
   if (!Array.isArray(data.clips) || data.clips.length === 0) {
+    clearLastLiveSpeechClips();
     return false;
+  }
+
+  const speechSnippets = data.clips
+    .map((clip) => clip?.speech || clip?.text || clip?.content || clip?.message)
+    .filter((speech): speech is string => Boolean(speech && speech.trim().length > 0))
+    .map((speech) => speech.trim());
+
+  if (speechSnippets.length > 0) {
+    setLastLiveSpeechClips(speechSnippets);
+  } else {
+    clearLastLiveSpeechClips();
   }
 
   console.log("\nVTuber Response:");
