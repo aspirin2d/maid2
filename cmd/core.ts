@@ -8,6 +8,7 @@ import {
   useKeypress,
   usePrefix,
   useState,
+  ExitPromptError,
 } from "@inquirer/core";
 import { extractErrorMessage, parseJSON } from "./lib.js";
 import { apiFetch } from "./api.js";
@@ -303,8 +304,8 @@ const rawMainMenuPrompt = createPrompt<any, MainMenuPromptConfig<any>>(
 const mainMenuPrompt = <T>(config: MainMenuPromptConfig<T>) =>
   rawMainMenuPrompt(config as MainMenuPromptConfig<any>) as Promise<T>;
 
-function isPromptAbortError(error: unknown): error is Error {
-  return error instanceof Error && error.name === "ExitPromptError";
+function isPromptAbortError(error: unknown): error is ExitPromptError {
+  return error instanceof ExitPromptError;
 }
 
 export type { Choice, ChoiceWithShortcut, MenuResult };
